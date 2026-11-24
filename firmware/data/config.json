@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "changedBy": "",
+  "changeText": "",
+  "features": { "calls": true, "media": true, "weather": true },
+  "contacts": [
+    { "id": "ania", "name": "Ania", "number": "+48600100200", "color": "#3D8BFD", "autoAnswer": true },
+    { "id": "basia", "name": "Basia", "number": "+48601200300", "color": "#C2185B" },
+    { "id": "marek", "name": "Marek", "number": "+48602300400", "color": "#2E7D32" },
+    { "id": "lekarz", "name": "Przychodnia", "number": "+48123456789", "color": "#6D4C41" }
+  ],
+  "calls": { "onlyContacts": false },
+  "home": { "slots": ["contact:ania", "media", "weather"], "partOfDay": true },
+  "media": [
+    { "type": "fm", "name": "Jedynka", "freq": 99.4 },
+    { "type": "fm", "name": "Radio Kraków", "freq": 101.6 },
+    { "type": "web", "name": "Polskie Radio Chopin", "url": "http://stream.polskieradio.pl/chopin" },
+    { "type": "playlist", "name": "Piosenki od Ani", "from": "Ania", "urls": ["http://example.com/lumi/piosenka1.mp3"] }
+  ],
+  "weather": { "place": "Kraków", "lat": 50.06, "lon": 19.94 },
+  "display": { "textSize": 0, "highContrast": false, "brightness": 80, "screenOffSec": 60 },
+  "sound": { "ringVolume": 8, "maxVolume": 10, "startVolume": 5, "keyClick": true,
+             "quiet": { "from": "22:00", "to": "07:00" } },
+  "access": { "autoAnswerSec": 5, "oneButton": false, "minPressMs": 0, "repeatIgnoreMs": 250,
+              "locked": [], "allowPowerOff": true },
+  "wifi": [ { "ssid": "NazwaSieciDomowej", "pass": "haslo" } ],
+  "sync": { "url": "", "intervalSec": 300 }
+}

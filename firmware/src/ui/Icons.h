@@ -1,0 +1,38 @@
+#pragma once
+// Ikony FontAwesome 5 wkompilowane w czcionki lumi_b20..b48 (lista w tools/gen_fonts.sh)
+#define IC_PHONE "\xEF\x82\x95"        // F095
+#define IC_PHONE_SLASH "\xEF\x8F\x9D"  // F3DD
+#define IC_MUSIC "\xEF\x80\x81"        // F001
+#define IC_HOME "\xEF\x80\x95"         // F015
+#define IC_PLAY "\xEF\x81\x8B"         // F04B
+#define IC_PAUSE "\xEF\x81\x8C"        // F04C
+#define IC_UP "\xEF\x81\xB7"           // F077
+#define IC_DOWN "\xEF\x81\xB8"         // F078
+#define IC_CHECK "\xEF\x80\x8C"        // F00C
+#define IC_CLOSE "\xEF\x80\x8D"        // F00D
+#define IC_VOLUME "\xEF\x80\xA8"       // F028
+#define IC_BELL "\xEF\x83\xB3"         // F0F3
+#define IC_BELL_SLASH "\xEF\x87\xB6"   // F1F6
+#define IC_BAT_FULL "\xEF\x89\x80"     // F240
+#define IC_BAT_3 "\xEF\x89\x81"        // F241
+#define IC_BAT_2 "\xEF\x89\x82"        // F242
+#define IC_BAT_1 "\xEF\x89\x83"        // F243
+#define IC_BAT_EMPTY "\xEF\x89\x84"    // F244
+#define IC_BOLT "\xEF\x83\xA7"         // F0E7
+#define IC_WIFI "\xEF\x87\xAB"         // F1EB
+#define IC_SIGNAL "\xEF\x80\x92"       // F012
+#define IC_SUN "\xEF\x86\x85"          // F185
+#define IC_CLOUD "\xEF\x83\x82"        // F0C2
+#define IC_CLOUD_SUN "\xEF\x9B\x84"    // F6C4
+#define IC_RAIN "\xEF\x9C\xBD"         // F73D
+#define IC_SHOWER "\xEF\x9D\x80"       // F740
+#define IC_SNOW "\xEF\x8B\x9C"         // F2DC
+#define IC_FOG "\xEF\x9D\x9F"          // F75F
+#define IC_RADIO "\xEF\x94\x99"        // F519 (wieża nadawcza)
+#define IC_GLOBE "\xEF\x82\xAC"        // F0AC
+#define IC_USER "\xEF\x80\x87"         // F007
+#define IC_POWER "\xEF\x80\x91"        // F011
+#define IC_WARN "\xEF\x81\xB1"         // F071
+#define IC_INFO "\xEF\x81\x9A"         // F05A
+#define IC_BACK "\xEF\x81\xA0"         // F060
+#define IC_SHUFFLE "\xEF\x81\xB4"      // F074
