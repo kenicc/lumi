@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_sleep.h>
+#include <esp_task_wdt.h>
 
 #include "app/App.h"
 #include "app/Console.h"
@@ -41,6 +42,10 @@ void setup() {
   input::begin();
   battery::begin();
   app::begin();
+  // Strażnik: jeśli pętla główna zawiśnie na 15 s, urządzenie samo się zrestartuje
+  // (u seniora nikt nie naciśnie RESET, a zawieszone LUMI nie odbierze rozmowy)
+  esp_task_wdt_init(15, true);
+  esp_task_wdt_add(nullptr);
   Serial.printf("LUMI %s gotowe. Wpisz help.\n", LUMI_VARIANT);
 }
 
@@ -50,5 +55,6 @@ void loop() {
   console::poll();
   app::loop();
   display::tick();
+  esp_task_wdt_reset();
   delay(5);
 }

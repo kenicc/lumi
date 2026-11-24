@@ -44,11 +44,7 @@ class Lgfx : public lgfx::LGFX_Device {
     p.panel_height = 320;
     p.readable = false;
     p.bus_shared = false;
-#if defined(LUMI_PANEL_ST7789)
-    p.invert = true;  // panele IPS ST7789 zwykle mają odwrócone kolory
-#else
-    p.invert = false;
-#endif
+    p.invert = LUMI_PANEL_INVERT;
     panel_.config(p);
     setPanel(&panel_);
   }

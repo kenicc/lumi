@@ -16,6 +16,7 @@
 #include "hw/Display.h"
 #include "hw/Input.h"
 #include "modem/Modem.h"
+#include "net/Identity.h"
 #include "net/Net.h"
 
 // ---------- atrapy Arduino ----------
@@ -50,6 +51,7 @@ bool receive(Event& e, uint32_t) {
 }  // namespace bus
 
 static audio::State aState;
+static bool simHasMedia = true;
 namespace audio {
 void begin(uint8_t v) { aState.volume = v; }
 void playFm(float) {
@@ -74,6 +76,7 @@ void ring(bool, uint8_t) {}
 void callMode(bool) {}
 State state() { return aState; }
 bool fmActive() { return aState.src == Src::Fm; }
+bool hasMedia() { return simHasMedia; }
 }  // namespace audio
 
 namespace modem {
@@ -83,6 +86,8 @@ void answer() { bus::post(Event(Ev::CallActive)); }
 void hangup() { bus::post(Event(Ev::CallEnded, 0)); }
 void setCallVolume(uint8_t) {}
 void powerOff() {}
+void ringer(uint8_t) {}
+void tone(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void raw(const char*) {}
 void diag() {}
 void bridge(Stream&) {}
@@ -96,14 +101,33 @@ const char* vendorName(Vendor) { return "sim"; }
 }  // namespace modem
 
 static wx::Forecast fc;
+static net::Cloud cloudSim = net::Cloud::Provisioning;
 namespace net {
-void begin(const char*) {}
+void begin() {}
 void apply(const Settings&) {}
 bool wifiConnected() { return true; }
+std::string wifiSsid() { return "Dom"; }
+Cloud cloud() { return cloudSim; }
+const char* cloudName(Cloud) { return ""; }
+void reportSoon() {}
+void startProvisioning() {}
 wx::Forecast forecast() { return fc; }
 void refreshWeather() {}
 bool saveConfigFile(const char*, size_t) { return true; }
 }  // namespace net
+
+namespace identity {
+void begin() {}
+const char* id() { return "LUMI-C3D4E5"; }
+const char* secret() { return "0"; }
+const char* pairCode() { return "K7MPQ2XR"; }
+const char* apPassword() { return "40719263"; }
+std::string server() { return "https://lumi-rodzina.vercel.app"; }
+void setServer(const std::string&) {}
+std::vector<cfg::Wifi> wifi() { return {}; }
+void addWifi(const std::string&, const std::string&) {}
+void factoryReset() {}
+}  // namespace identity
 
 static uint8_t batPct = 76;
 namespace battery {
@@ -220,7 +244,11 @@ int main() {
   mkdir("sim/out/empty", 0755);
   display::begin();
   app::begin();
-  shot("00_parowanie");
+  shot("00_parowanie_wifi");
+  cloudSim = net::Cloud::Unclaimed;
+  bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
+  shot("00_parowanie_aplikacja");
+  cloudSim = net::Cloud::Ok;
 
   // 2. Konfiguracja przykładowa
   std::string base = readFile("data/config.json");
@@ -315,5 +343,19 @@ int main() {
   batPct = 15;
   run(1500);
   shot("17_bateria");
+  key(Key::Top);
+  batPct = 76;
+
+  // prototyp z Allegro: bez radia, rolka = dzwonek
+  simHasMedia = false;
+  one = base;
+  replace(one, "\"version\": 1", "\"version\": 4");
+  writeCfg("sim/out/cfg", one);
+  app::reloadConfig(false);
+  key(Key::Home);
+  shot("18_allegro_glowny");
+  bus::post(Event(Ev::Wheel, 1));
+  run(200);
+  shot("19_allegro_dzwonek");
   return 0;
 }

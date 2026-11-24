@@ -60,6 +60,31 @@ constexpr bool PWRKEY_ACTIVE_HIGH = true;
 constexpr bool PWRKEY_ACTIVE_HIGH = false;
 #endif
 
+// Płytka modemu bez PWRKEY (SIM800L): pin 42 idzie do RST modemu, stan niski = reset.
+#ifdef LUMI_MODEM_RESET_ONLY
+constexpr bool MODEM_RESET_ONLY = true;
+#else
+constexpr bool MODEM_RESET_ONLY = false;
+#endif
+
+// Prototyp z Allegro nie ma DAC, wzmacniacza ani tunera FM: dźwięk (dzwonek, rozmowa, sygnały)
+// idzie wyłącznie z głośnika podłączonego do modemu SIM800L. Radio i muzyka są wtedy niedostępne.
+#ifdef LUMI_AUDIO_MODEM
+constexpr bool HAS_MEDIA_AUDIO = false;
+#else
+constexpr bool HAS_MEDIA_AUDIO = true;
+#endif
+
+// Odwrócenie kolorów ekranu: panele IPS ST7789 zwykle wymagają, zwykłe TN różnie.
+// Jeśli kolory wyglądają jak negatyw, przełącz flagę LUMI_PANEL_INVERT w platformio.ini.
+#ifndef LUMI_PANEL_INVERT
+#if defined(LUMI_PANEL_ST7789)
+#define LUMI_PANEL_INVERT 1
+#else
+#define LUMI_PANEL_INVERT 0
+#endif
+#endif
+
 // Obrót ekranu (0-3). Zależy od tego, jak moduł leży w obudowie.
 #ifndef LUMI_ROTATION
 #define LUMI_ROTATION 1

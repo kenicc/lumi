@@ -1,6 +1,10 @@
 #pragma once
-// Wi-Fi, czas z NTP, pogoda (Open-Meteo, bez klucza) i pobieranie konfiguracji od rodziny.
-// W trybie FM Wi-Fi jest wyłączane (cisza elektryczna wokół anteny).
+// Sieć: Wi-Fi (wyłączane w trybie FM), czas z NTP, pogoda (Open-Meteo, bez klucza)
+// i połączenie z serwerem aplikacji rodziny:
+//   POST /api/device/hello   - rejestracja (id, sekret, kod parowania)
+//   GET  /api/device/config  - dokument konfiguracji, gdy jest nowsza wersja
+//   POST /api/device/status  - bateria, zasięg, wersja (rodzina widzi stan w aplikacji)
+// Gdy urządzenie nie zna żadnej sieci, wystawia własną (LUMI-XXXXXX) ze stroną konfiguracji Wi-Fi.
 #include <string>
 #include <vector>
 
@@ -9,22 +13,36 @@
 
 namespace net {
 
+enum class Cloud : uint8_t {
+  NoWifi,        // nie zna żadnej sieci
+  Provisioning,  // wystawia sieć LUMI-XXXXXX do konfiguracji z telefonu
+  Connecting,    // łączy z Wi-Fi
+  NoServer,      // brak adresu serwera
+  Offline,       // Wi-Fi jest, serwer nie odpowiada
+  Unclaimed,     // serwer zna urządzenie, ale nikt go nie dodał w aplikacji
+  Ok,
+  AuthError,     // serwer odrzuca sekret (urządzenie przypisane gdzie indziej)
+};
+
 struct Settings {
   std::vector<cfg::Wifi> wifi;
   float lat = 0, lon = 0;
   bool weather = true;
-  std::string syncUrl;
-  uint16_t syncIntervalSec = 300;
+  uint16_t syncIntervalSec = 20;
   int version = 0;
 };
 
-void begin(const char* deviceId);
-void apply(const Settings& s);  // po każdej zmianie konfiguracji
+void begin();
+void apply(const Settings& s);
 bool wifiConnected();
+std::string wifiSsid();
+Cloud cloud();
+const char* cloudName(Cloud c);
 wx::Forecast forecast();
 void refreshWeather();
+void reportSoon();  // wyślij stan przy najbliższej okazji (np. po zastosowaniu konfiguracji)
+void startProvisioning();
 
-// Zapis konfiguracji: najpierw plik tymczasowy, potem zamiana - przerwa w zasilaniu nie psuje pliku.
 bool saveConfigFile(const char* json, size_t len);
 
 }  // namespace net

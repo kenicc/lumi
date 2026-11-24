@@ -6,6 +6,8 @@ class Preferences {
  public:
   bool begin(const char*, bool) { return true; }
   void putInt(const char* k, int v) { i_[k] = v; }
+  void putUChar(const char* k, uint8_t v) { i_[k] = v; }
+  uint8_t getUChar(const char* k, uint8_t d) { return i_.count(k) ? (uint8_t)i_[k] : d; }
   int getInt(const char* k, int d) { return i_.count(k) ? (int)i_[k] : d; }
   void putLong64(const char* k, int64_t v) { i_[k] = v; }
   int64_t getLong64(const char* k, int64_t d) { return i_.count(k) ? i_[k] : d; }

@@ -320,6 +320,7 @@ State state() {
 }
 
 bool fmActive() { return state().src == Src::Fm; }
+bool hasMedia() { return true; }
 
 }  // namespace audio
 

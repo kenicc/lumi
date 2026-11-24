@@ -82,6 +82,13 @@ bool parseCops(const char* line, char* op, size_t n, int& act) {
   return true;
 }
 
+bool parseCbc(const char* line, int& mv) {
+  const char* p = afterPrefix(line, "+CBC:");
+  if (!p) return false;
+  int chg, pct;
+  return sscanf(p, "%d,%d,%d", &chg, &pct, &mv) == 3 && mv > 2500 && mv < 5000;
+}
+
 int64_t daysFromCivil(int y, unsigned m, unsigned d) {
   y -= m <= 2;
   const int era = (y >= 0 ? y : y - 399) / 400;

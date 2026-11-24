@@ -35,6 +35,7 @@ void ring(bool on, uint8_t level);  // dzwonek narasta od cichszego do level
 void callMode(bool on);             // rozmowa: media wyciszone, wzmacniacz włączony dla głosu z modemu
 
 State state();
+bool hasMedia();  // false w prototypie bez DAC i tunera (dźwięk tylko z modemu)
 bool fmActive();  // dla sieci: w trybie FM Wi-Fi jest wyłączone (cisza elektryczna)
 
 }  // namespace audio

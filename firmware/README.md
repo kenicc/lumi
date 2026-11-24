@@ -31,6 +31,7 @@ Wymagane: [PlatformIO](https://platformio.org) (`pip install platformio`).
 
 ```bash
 cd firmware
+pio run -e allegro -t upload   # prototyp z koszyka Allegro: SIM800L + 2,8" (docs/prototyp-allegro.md)
 pio run -e proto -t upload     # firmware (proto: A7670E + ekran 2,4"; series: EG915U + 2,8")
 pio run -e proto -t uploadfs   # data/: config.json + dźwięki
 pio device monitor             # konsola serwisowa, wpisz: help
@@ -38,7 +39,13 @@ pio test -e native             # testy logiki na komputerze
 sim/build.sh                   # zrzuty ekranów do sim/out (wymaga Pillow)
 ```
 
-Przed wgraniem: wpisz swoje Wi-Fi i numery w `data/config.json` (opis pól: [docs/config.md](docs/config.md)).
+Pierwsze uruchomienie bez konfiguracji prowadzi przez dwa kroki na ekranie: kod QR sieci LUMI (telefon podaje domowe Wi-Fi na stronie 192.168.4.1), potem kod QR parowania z aplikacją rodziny (`../app`). Adres aplikacji: flaga `LUMI_SERVER` w `platformio.ini`, strona 192.168.4.1 albo konsola `server <adres>`.
+
+Bez aplikacji: wpisz Wi-Fi i numery w `data/config.json` (opis pól: [docs/config.md](docs/config.md)) i wgraj `uploadfs`.
+
+| Krok 1: Wi-Fi | Krok 2: aplikacja |
+| --- | --- |
+| ![](docs/ekrany/00_parowanie_wifi.png) | ![](docs/ekrany/00_parowanie_aplikacja.png) |
 
 Ustawienia sprzętowe w `src/hw/Board.h`: wersja DevKitu (`LUMI_DEVKIT_V10` dla v1.0 - dioda RGB na innym pinie), sterowanie PWRKEY modemu, obrót ekranu, dzielnik baterii.
 
@@ -62,7 +69,7 @@ Interfejs da się testować bez przylutowanych przycisków: `key call`, `key mid
 | `src/hw/` | piny, ekran (LovyanGFX + LVGL 9), przyciski i rolka, bateria |
 | `src/modem/` | rozmowy: jedna warstwa AT dla A7670E i EG915U, rozpoznawanie modemu, stan rozmowy z `AT+CLCC` |
 | `src/audio/` | FM (RDA5807M), strumienie i MP3 (ESP32-audioI2S), dzwonek, wzmacniacz usypiany w ciszy |
-| `src/net/` | Wi-Fi (wyłączane w trybie FM), NTP, pogoda Open-Meteo, pobieranie konfiguracji |
+| `src/net/` | tożsamość urządzenia, Wi-Fi z telefonu (własna sieć LUMI), serwer aplikacji przez HTTPS ze sprawdzaniem certyfikatów, pogoda, NTP |
 | `src/ui/`, `src/app/` | motyw, pasek etykiet, ekrany, pierwszeństwo rozmowy, konsola serwisowa |
 | `sim/` | symulator ekranu na komputerze |
 | `tools/` | generowanie czcionek z polskimi znakami i dźwięków |
@@ -71,13 +78,13 @@ Zadania FreeRTOS: modem i audio na rdzeniu 1, interfejs i sieć na rdzeniu 0. Mo
 
 ## Co jest, a czego jeszcze nie ma
 
-Gotowe: wszystkie ekrany wersji podstawowej, rozmowy (wybieranie, odbieranie, odrzucanie, nieodebrane, automatyczne odbieranie), radio FM, radio internetowe i listy MP3, zegar z sieci komórkowej lub NTP, pogoda, konfiguracja z pliku i z adresu HTTPS, komunikaty o zmianach, opcje dostępności, wyłączanie z uśpieniem, konsola serwisowa, testy, symulator.
+Gotowe: parowanie z aplikacją rodziny, raport stanu do aplikacji, restart zawieszonego modemu, strażnik pętli głównej, wszystkie ekrany wersji podstawowej, rozmowy (wybieranie, odbieranie, odrzucanie, nieodebrane, automatyczne odbieranie), radio FM, radio internetowe i listy MP3, zegar z sieci komórkowej lub NTP, pogoda, konfiguracja z pliku i z adresu HTTPS, komunikaty o zmianach, opcje dostępności, wyłączanie z uśpieniem, konsola serwisowa, testy, symulator.
 
 Niesprawdzone na sprzęcie (kod kompiluje się, ale nikt go jeszcze nie uruchomił na płytce): komendy modemu w praktyce, poziomy audio, enkoder, pomiar baterii.
 
 Świadomie na później:
 
-- **Aplikacja rodziny i chmura (etap 3).** Urządzenie umie już pobrać dokument z adresu HTTPS i pokazać zmianę; MQTT (powiadomienie w kilka sekund) dojdzie razem z serwerem.
+- **Powiadomienie w kilka sekund (MQTT).** Teraz LUMI pyta serwer co 20 s, co na Wi-Fi wystarcza.
 - **Aktualizacje OTA.** Partycje są przygotowane (dwie po 5 MB), samo pobieranie i podpisywanie obrazu - razem z serwerem.
 - **Zdjęcia kontaktów.** Na razie kółko z inicjałem w kolorze z aplikacji.
 - **Radio internetowe przez LTE.** Prototyp gra strumienie tylko przez Wi-Fi.

@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <driver/rtc_io.h>
 #include <esp_sleep.h>
+#include <esp_task_wdt.h>
 
 #include <deque>
 #include <string>
@@ -12,14 +13,19 @@
 #include "audio/AudioOut.h"
 #include "core/AtParse.h"
 #include "core/Calendar.h"
+#include "core/Pairing.h"
 #include "hw/Battery.h"
 #include "hw/Board.h"
 #include "hw/Display.h"
 #include "hw/Input.h"
 #include "modem/Modem.h"
+#include "net/Identity.h"
 #include "net/Net.h"
 #include "ui/Icons.h"
 #include "ui/Ui.h"
+
+LV_FONT_DECLARE(lumi_b20);
+LV_FONT_DECLARE(lumi_r20);
 
 namespace app {
 
@@ -47,6 +53,7 @@ struct Call {
   uint32_t startedAt = 0;
   bool silenced = false;
   bool rejected = false;
+  bool hungUpHere = false;  // rozłączył senior (bez komunikatu "Nikt nie odebrał")
   uint32_t autoAt = 0;  // automatyczne odbieranie
   uint8_t autoStage = 0;
   bool autoAnswered = false;
@@ -62,6 +69,7 @@ struct Missed {
 Missed missed;
 
 std::deque<std::string> notices;
+std::string shownNotice;  // aktualnie widoczny - wraca do kolejki, gdy przerwie go rozmowa
 Preferences prefs;
 
 uint32_t lastInput = 0;
@@ -74,9 +82,14 @@ bool modemReady = false, simOk = true, modemFailed = false;
 bool powerHolding = false;
 uint32_t powerHoldAt = 0;
 uint8_t batteryWarned = 100;
+uint8_t ringOverride = 0;  // prototyp bez radia: rolka poza rozmową zmienia głośność dzwonka (0 = jak w aplikacji)
 lv_obj_t* live = nullptr;  // etykieta odświeżana co sekundę (czas rozmowy, odliczanie)
 
 // ---------- pomocnicze ----------
+
+bool mediaOn() { return C.media && audio::hasMedia(); }
+
+uint8_t ringLevel() { return ringOverride ? ringOverride : C.ringVolume; }
 
 const cfg::Contact* contactAt(int i) { return (i >= 0 && i < (int)C.contacts.size()) ? &C.contacts[i] : nullptr; }
 
@@ -274,7 +287,7 @@ void renderHome() {
         break;
       }
       case cfg::SlotKind::Media:
-        if (C.media && !C.mediaList.empty()) {
+        if (mediaOn() && !C.mediaList.empty()) {
           bool music = C.mediaList[mediaIdx].type == cfg::MediaType::Playlist;
           ui::setRail(i, playing ? IC_PAUSE : IC_MUSIC, playing ? "Gra" : (music ? "Muzyka" : "Radio"),
                       playing ? ui::Tone::Accent : ui::Tone::Neutral);
@@ -420,27 +433,80 @@ void renderConfirm() {
   ui::setRail(2, IC_CLOSE, "Nie", ui::Tone::No);
 }
 
-void renderUnpaired() {
-  auto& P = ui::pal();
-  auto& F = ui::fonts();
-  lv_obj_t* col = centeredColumn();
-  lv_obj_t* frame = lv_obj_create(col);  // kod QR musi być ciemny na jasnym, żeby telefon go odczytał
+// Pierwsze uruchomienie - ekran dla rodziny (senior dostaje urządzenie już ustawione):
+// 1) połącz telefon z siecią LUMI i podaj Wi-Fi, 2) zeskanuj kod, żeby dodać LUMI do aplikacji.
+void qrBox(lv_obj_t* parent, const std::string& payload, int size) {
+  lv_obj_t* frame = lv_obj_create(parent);  // kod QR musi być ciemny na jasnym, żeby telefon go odczytał
   lv_obj_remove_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(frame, 132, 132);
+  lv_obj_set_size(frame, size + 12, size + 12);
   lv_obj_set_style_bg_color(frame, lv_color_hex(0xFFFFFF), 0);
   lv_obj_set_style_border_width(frame, 0, 0);
   lv_obj_set_style_radius(frame, 8, 0);
   lv_obj_set_style_pad_all(frame, 6, 0);
   lv_obj_t* qr = lv_qrcode_create(frame);
-  lv_qrcode_set_size(qr, 120);
+  lv_qrcode_set_size(qr, size);
   lv_qrcode_set_dark_color(qr, lv_color_hex(0x000000));
   lv_qrcode_set_light_color(qr, lv_color_hex(0xFFFFFF));
-  char payload[64];
-  snprintf(payload, sizeof payload, "lumi://pair?id=%s", devId);
-  lv_qrcode_update(qr, payload, strlen(payload));
+  lv_qrcode_update(qr, payload.data(), payload.size());
   lv_obj_center(qr);
-  centerText(ui::label(col, F.small, P.text, "Poproś rodzinę o ustawienie LUMI", true));
+}
+
+void renderUnpaired() {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  net::Cloud c = net::cloud();
+  ui::setContentWide(true);
   ui::hideRails();
+  const lv_font_t* f = &lumi_b20;
+  bool wifiStep = c == net::Cloud::NoWifi || c == net::Cloud::Provisioning;
+  if (wifiStep || c == net::Cloud::Unclaimed) {
+    // kod QR z lewej, instrukcja z prawej
+    qrBox(ui::content(), wifiStep ? pairing::wifiQr(identity::id(), identity::apPassword())
+                                  : pairing::pairUrl(identity::server(), identity::id(), identity::pairCode()),
+          138);
+    lv_obj_align(lv_obj_get_child(ui::content(), 0), LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t* col = ui::column(ui::content(), 6);
+    lv_obj_set_size(col, 146, lv_pct(100));
+    lv_obj_align(col, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    if (wifiStep) {
+      ui::label(col, f, P.accent, "Krok 1 z 2");
+      ui::label(col, f, P.text, "Zeskanuj aparatem telefonu, żeby połączyć się z LUMI.", true);
+      ui::label(col, &lumi_r20, P.dim, "Potem otwórz stronę", true);
+      ui::label(col, f, P.text, "192.168.4.1");
+    } else {
+      char code[24];
+      snprintf(code, sizeof code, "Kod: %s", identity::pairCode());
+      ui::label(col, f, P.accent, "Krok 2 z 2");
+      ui::label(col, f, P.text, "Zeskanuj, żeby dodać LUMI do aplikacji rodziny.", true);
+      ui::label(col, &lumi_r20, P.dim, code, true);
+    }
+    return;
+  }
+  lv_obj_t* col = centeredColumn();
+  const char* title = "";
+  const char* sub = nullptr;
+  lv_color_t tc = P.text;
+  switch (c) {
+    case net::Cloud::Ok: title = "Pobieram ustawienia..."; break;
+    case net::Cloud::Connecting: title = "Łączę z Wi-Fi..."; break;
+    case net::Cloud::NoServer:
+      title = "Brak adresu serwera";
+      sub = "Podaj go na stronie 192.168.4.1 albo w konsoli: server <adres>";
+      break;
+    case net::Cloud::Offline:
+      title = "Serwer nie odpowiada";
+      sub = "Spróbuję ponownie za chwilę";
+      break;
+    case net::Cloud::AuthError:
+      title = "Serwer odrzuca to urządzenie";
+      sub = "Usuń je w aplikacji i dodaj ponownie";
+      tc = P.no;
+      break;
+    default: break;
+  }
+  centerText(ui::label(col, F.body, tc, title, true));
+  if (sub) centerText(ui::label(col, F.small, P.dim, sub, true));
 }
 
 void renderCall() {
@@ -496,6 +562,7 @@ void updateLive() {
 void render() {
   live = nullptr;
   ui::clearContent();
+  ui::setContentWide(false);
   if (call.phase != Phase::None) renderCall();
   else switch (scr) {
       case Screen::Home: renderHome(); break;
@@ -584,7 +651,10 @@ void rightAction(int slot) {
     return;
   }
   if (call.phase != Phase::None) {
-    if (slot == 2) modem::hangup();
+    if (slot == 2) {
+      call.hungUpHere = true;
+      modem::hangup();
+    }
     return;
   }
 
@@ -666,6 +736,7 @@ void rightAction(int slot) {
 }
 
 void shutdown() {
+  esp_task_wdt_delete(nullptr);  // wyłączanie trwa kilka sekund - strażnik nie może przerwać
   ui::powerHold(false, 0, 0);
   ui::dismissNotice();
   ui::hideRails();
@@ -779,6 +850,10 @@ void onKey(Key k, Ev type) {
       go(haveConfig ? Screen::Home : Screen::Unpaired);
       break;
     case Key::Music:
+      if (!audio::hasMedia()) {
+        ui::toast("Radio nie jest podłączone w tym prototypie");
+        break;
+      }
       if (!haveConfig || C.lockMusic || !C.media) {
         ui::toast("Ten przycisk jest wyłączony");
         break;
@@ -802,11 +877,18 @@ void onWheel(int d) {
   if (call.phase == Phase::Active || call.phase == Phase::Outgoing) {
     callVolume = clampv<int>(callVolume + d, 1, 10);
     modem::setCallVolume(callVolume);
+    prefs.putUChar("callVol", callVolume);  // senior ustawia raz, zostaje na kolejne rozmowy
     ui::volumeBar("Rozmowa", callVolume, 10);
     return;
   }
   if (call.phase == Phase::Incoming) {
     if (d < 0) silence();  // skręcenie w dół wycisza dzwonek
+    return;
+  }
+  if (!audio::hasMedia()) {  // prototyp bez radia: rolka ustawia dzwonek
+    ringOverride = clampv<int>(ringLevel() + d, 1, 10);
+    modem::ringer(ringOverride);
+    ui::volumeBar("Dzwonek", ringOverride, 10);
     return;
   }
   volume = clampv<int>(volume + d, 0, C.maxVolume);
@@ -822,6 +904,12 @@ void onIncoming(const char* num) {
     return;
   }
   if (call.phase != Phase::None) return;
+  if (ui::noticeVisible()) {  // rozmowa ma pierwszeństwo, komunikat wróci po niej
+    notices.push_front(shownNotice);
+    ui::dismissNotice();
+  }
+  ui::powerHold(false, 0, 0);
+  powerHolding = false;
   call = Call{};
   call.phase = Phase::Incoming;
   strlcpy(call.number, num, sizeof call.number);
@@ -829,7 +917,7 @@ void onIncoming(const char* num) {
   wake();
   bool quiet = timeValid() && C.inQuietHours(minuteOfDay());
   // W godzinach ciszy dzwonek jest cichy, ale nigdy wyłączony - rodzina musi się dodzwonić
-  audio::ring(true, quiet ? (C.ringVolume < 3 ? C.ringVolume : 3) : C.ringVolume);
+  audio::ring(true, quiet ? (ringLevel() < 3 ? ringLevel() : 3) : ringLevel());
   if (k >= 0 && C.contacts[k].autoAnswer) call.autoAt = millis() + C.autoAnswerSec * 1000UL;
   render();
 }
@@ -851,8 +939,9 @@ void onEnded(bool answered, const char* text) {
     prefs.putLong64("mAt", missed.at);
     prefs.putInt("mCnt", missed.count);
   }
-  if (was == Phase::Outgoing && !answered)
+  if (was == Phase::Outgoing && !answered && !call.hungUpHere)
     ui::toast(!strcmp(text, "error") ? "Nie udało się połączyć" : "Nikt nie odebrał");
+  if (was == Phase::Active && !call.hungUpHere) ui::toast("Rozmowa zakończona");
   audio::ring(false, 0);
   audio::callMode(false);
   call = Call{};
@@ -874,6 +963,7 @@ void applyConfig() {
   input::configure(C.minPressMs, C.repeatIgnoreMs, C.oneButton);
   audio::setMaxVolume(C.maxVolume);
   audio::setKeyClick(C.keyClick);
+  if (!audio::hasMedia()) modem::ringer(ringLevel());
   if (volume > C.maxVolume) {
     volume = C.maxVolume;
     audio::setVolume(volume);
@@ -883,7 +973,6 @@ void applyConfig() {
   s.lat = C.lat;
   s.lon = C.lon;
   s.weather = C.weather;
-  s.syncUrl = C.syncUrl;
   s.syncIntervalSec = C.syncIntervalSec;
   s.version = C.version;
   net::apply(s);
@@ -962,8 +1051,9 @@ void tick() {
 
   if (!ui::noticeVisible() && call.phase == Phase::None && !notices.empty()) {
     wake();
-    ui::notice(IC_INFO, notices.front().c_str());
+    shownNotice = notices.front();
     notices.pop_front();
+    ui::notice(IC_INFO, shownNotice.c_str());
     audio::sound(audio::Sound::Notice);
   }
 
@@ -1012,6 +1102,9 @@ void handle(const Event& e) {
       break;
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
+    case Ev::CloudState:
+      if (call.phase == Phase::None && scr == Screen::Unpaired) render();
+      break;
     case Ev::MediaState:
       applyBacklight();  // FM -> podświetlenie bez PWM
       if (call.phase == Phase::None && (scr == Screen::Media || scr == Screen::Home)) render();
@@ -1024,9 +1117,10 @@ void handle(const Event& e) {
 // ---------- interfejs publiczny ----------
 
 void begin() {
-  uint64_t mac = ESP.getEfuseMac();
-  snprintf(devId, sizeof devId, "LUMI-%06X", (unsigned)((mac >> 24) & 0xFFFFFF));
+  identity::begin();
+  strlcpy(devId, identity::id(), sizeof devId);
   prefs.begin("lumi", false);
+  callVolume = prefs.getUChar("callVol", 7);
   ui::begin();
   bool ok = loadConfig();
   if (!ok) Serial.println("[config] brak konfiguracji - ekran parowania");
@@ -1042,7 +1136,7 @@ void begin() {
 
   audio::begin(volume);
   modem::begin();
-  net::begin(devId);
+  net::begin();
   applyConfig();
   scr = ok ? Screen::Home : Screen::Unpaired;
   lastInput = millis();

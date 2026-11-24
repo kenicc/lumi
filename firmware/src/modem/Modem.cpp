@@ -13,10 +13,11 @@ namespace {
 
 HardwareSerial& uart = Serial1;
 
-enum class CmdType : uint8_t { Dial, Answer, Hangup, Volume, Raw, Diag, PowerOff };
+enum class CmdType : uint8_t { Dial, Answer, Hangup, Volume, Raw, Diag, PowerOff, Ringer, Tone };
 struct Cmd {
   CmdType t;
   char arg[64];
+  uint16_t v[4];
 };
 
 QueueHandle_t cmdQ;
@@ -148,6 +149,13 @@ Res cmd(const char* c, uint32_t timeoutMs = 2000, char* resp = nullptr, size_t n
 }
 
 void pulsePwrkey(uint32_t ms) {
+  if (board::MODEM_RESET_ONLY) {
+    // płytka bez PWRKEY (np. SIM800L): modem działa od podania zasilania, a pin to RST (stan niski = reset)
+    digitalWrite(pins::MODEM_PWRKEY, LOW);
+    vTaskDelay(pdMS_TO_TICKS(200));
+    digitalWrite(pins::MODEM_PWRKEY, HIGH);
+    return;
+  }
   digitalWrite(pins::MODEM_PWRKEY, board::PWRKEY_ACTIVE_HIGH ? HIGH : LOW);
   vTaskDelay(pdMS_TO_TICKS(ms));
   digitalWrite(pins::MODEM_PWRKEY, board::PWRKEY_ACTIVE_HIGH ? LOW : HIGH);
@@ -170,11 +178,14 @@ void readTime() {
   }
 }
 
-void pollNetwork() {
+// false = modem przestał odpowiadać
+bool pollNetwork() {
   char r[96];
   int rssi = 99, stat = 0, act = -1;
   char op[20] = {0};
-  if (cmd("AT+CSQ", 1000, r, sizeof r) == Res::Ok) at::parseCsq(r, rssi);
+  Res csq = cmd("AT+CSQ", 1000, r, sizeof r);
+  if (csq == Res::Timeout && cmd("AT", 1000) == Res::Timeout) return false;
+  if (csq == Res::Ok) at::parseCsq(r, rssi);
   bool reg = false;
   if (cmd("AT+CEREG?", 1000, r, sizeof r) == Res::Ok && at::parseRegStat(r, stat)) reg = at::isRegistered(stat);
   if (!reg && cmd("AT+CREG?", 1000, r, sizeof r) == Res::Ok && at::parseRegStat(r, stat))
@@ -185,8 +196,17 @@ void pollNetwork() {
   st.registered = reg;
   st.lte = (act == 7);
   strlcpy(st.op, op, sizeof st.op);
+  Vendor v = st.vendor;
   xSemaphoreGive(stMutex);
+  int mv;
+  // SIM800L jest zasilany prosto z akumulatora i sam mierzy jego napięcie
+  if (v == Vendor::Sim800 && cmd("AT+CBC", 1000, r, sizeof r) == Res::Ok && at::parseCbc(r, mv)) {
+    xSemaphoreTake(stMutex, portMAX_DELAY);
+    st.batteryMv = mv;
+    xSemaphoreGive(stMutex);
+  }
   if (reg && !timeSet) readTime();
+  return true;
 }
 
 // Lista połączeń - jedyne wiarygodne źródło stanu u obu producentów
@@ -225,8 +245,9 @@ bool startup() {
   char r[160];
   Vendor v = Vendor::Unknown;
   if (cmd("ATI", 1000, r, sizeof r) == Res::Ok) {
-    if (strcasestr(r, "SIMCOM")) v = Vendor::Simcom;
-    else if (strcasestr(r, "Quectel")) v = Vendor::Quectel;
+    if (strcasestr(r, "SIM800") || strcasestr(r, "SIM900")) v = Vendor::Sim800;
+    else if (strcasestr(r, "SIMCOM") || strcasestr(r, "A76")) v = Vendor::Simcom;
+    else if (strcasestr(r, "Quectel") || strcasestr(r, "EG915")) v = Vendor::Quectel;
   }
   char model[24] = {0}, fw[48] = {0};
   if (cmd("AT+CGMM", 1000, r, sizeof r) == Res::Ok) strlcpy(model, r, sizeof model);
@@ -240,9 +261,19 @@ bool startup() {
 
   // Wspólna konfiguracja: błędy słowne, numer dzwoniącego, rejestracja przez zapytania,
   // czas z sieci, bez połączeń oczekujących (druga rozmowa myli seniora).
-  static const char* const kInit[] = {"AT+CMEE=2", "AT+CLIP=1", "AT+CREG=0", "AT+CEREG=0", "AT+CTZU=1", "AT+CCWA=0"};
+  static const char* const kInit[] = {"AT+CMEE=2", "AT+CLIP=1", "AT+CREG=0", "AT+CCWA=0"};
   for (const char* c : kInit)
     if (cmd(c) != Res::Ok) Serial.printf("[modem] %s nie przeszlo\n", c);
+  // Różnice producentów: LTE (CEREG, CTZU) albo 2G (SIM800: czas z sieci przez CLTS, własny dzwonek)
+  static const char* const kLte[] = {"AT+CEREG=0", "AT+CTZU=1"};
+  static const char* const kSim800[] = {"AT+CLTS=1", "AT+CALM=0", "AT+CSCLK=0"};
+  if (v == Vendor::Sim800) {
+    for (const char* c : kSim800)
+      if (cmd(c) != Res::Ok) Serial.printf("[modem] %s nie przeszlo\n", c);
+  } else {
+    for (const char* c : kLte)
+      if (cmd(c) != Res::Ok) Serial.printf("[modem] %s nie przeszlo\n", c);
+  }
   if (cmd("AT+CLVL=?", 1000, r, sizeof r) == Res::Ok) {
     int lo, hi;
     const char* p = strchr(r, '(');
@@ -280,17 +311,23 @@ void runDiag() {
   // Komendy zależne od producenta - do potwierdzenia z dokumentacją AT konkretnej wersji oprogramowania
   static const char* const kQuectel[] = {"AT+QCFG=\"ims\"", "AT+QNWINFO", "AT+QENG=\"servingcell\""};
   static const char* const kSimcom[] = {"AT+CNMP?", "AT+CPSI?"};
+  static const char* const kSim800[] = {"AT+CBC", "AT+CCID", "AT+CLVL?", "AT+CMIC?"};
   Serial.println("=== diagnostyka modemu ===");
   for (const char* c : kCommon) {
     Serial.printf("> %s\n", c);
     cmd(c, 3000, nullptr, 0, true);
   }
   Vendor v = status().vendor;
-  const char* const* list = v == Vendor::Quectel ? kQuectel : kSimcom;
-  size_t n = v == Vendor::Quectel ? 3 : 2;
+  const char* const* list = v == Vendor::Quectel ? kQuectel : v == Vendor::Sim800 ? kSim800 : kSimcom;
+  size_t n = v == Vendor::Quectel ? 3 : v == Vendor::Sim800 ? 4 : 2;
   for (size_t i = 0; i < n; i++) {
     Serial.printf("> %s\n", list[i]);
     cmd(list[i], 3000, nullptr, 0, true);
+  }
+  if (v == Vendor::Sim800) {
+    Serial.println("SIM800 dziala tylko w 2G (bez VoLTE): to test interfejsu i rozmow, nie test etapu 1.");
+    Serial.println("Sprawdz: +CREG 0,1 lub 0,5, potem 'call <numer>'.");
+    return;
   }
   Serial.println("Sprawdz: +CEREG stat 1/5, +COPS ...,7 (LTE). Potem zadzwon: 'call <numer>'");
   Serial.println("i w trakcie rozmowy 'at AT+COPS?' - wciaz 7 oznacza rozmowe przez VoLTE, bez spadku do 2G.");
@@ -326,6 +363,21 @@ void handle(const Cmd& c) {
       cmd(b);
       break;
     }
+    case CmdType::Ringer:
+      if (status().vendor == Vendor::Sim800) {
+        char b[24];
+        snprintf(b, sizeof b, "AT+CRSL=%u", c.v[0] * 10);  // 0..100
+        cmd(b);
+      }
+      break;
+    case CmdType::Tone:
+      // SIM800: ton generowany przez modem na jego głośniku (prototyp bez DAC i wzmacniacza)
+      if (status().vendor == Vendor::Sim800 && cs == CallState::Idle) {
+        char b[56];
+        snprintf(b, sizeof b, "AT+SIMTONE=1,%u,%u,%u,%u", c.v[0], c.v[1], c.v[2], c.v[3]);
+        cmd(b, 1000);
+      }
+      break;
     case CmdType::Raw:
       Serial.printf("> %s\n", c.arg);
       Serial.println(cmd(c.arg, 10000, nullptr, 0, true) == Res::Ok ? "  OK" : "  (blad lub brak odpowiedzi)");
@@ -333,7 +385,7 @@ void handle(const Cmd& c) {
     case CmdType::Diag: runDiag(); break;
     case CmdType::PowerOff: {
       Vendor v = status().vendor;
-      Res r = cmd(v == Vendor::Quectel ? "AT+QPOWD=1" : "AT+CPOF", 3000);
+      Res r = cmd(v == Vendor::Quectel ? "AT+QPOWD=1" : v == Vendor::Sim800 ? "AT+CPOWD=1" : "AT+CPOF", 3000);
       if (r != Res::Ok) pulsePwrkey(3000);
       setStatus([](Status& s) { s.ready = false; });
       break;
@@ -344,7 +396,7 @@ void handle(const Cmd& c) {
 void task(void*) {
   uart.begin(115200, SERIAL_8N1, pins::MODEM_RX, pins::MODEM_TX);
   pinMode(pins::MODEM_PWRKEY, OUTPUT);
-  digitalWrite(pins::MODEM_PWRKEY, board::PWRKEY_ACTIVE_HIGH ? LOW : HIGH);
+  digitalWrite(pins::MODEM_PWRKEY, board::MODEM_RESET_ONLY ? HIGH : (board::PWRKEY_ACTIVE_HIGH ? LOW : HIGH));
   pinMode(pins::MODEM_DTR, OUTPUT);
   digitalWrite(pins::MODEM_DTR, LOW);  // DTR nisko = modem nie śpi
   pinMode(pins::MODEM_RI, INPUT_PULLUP);
@@ -357,6 +409,7 @@ void task(void*) {
   pollNetwork();
 
   uint32_t lastNet = millis(), lastClcc = 0;
+  uint8_t silentPolls = 0;
   for (;;) {
     if (bridging) {
       vTaskDelay(pdMS_TO_TICKS(50));
@@ -378,7 +431,18 @@ void task(void*) {
     }
     if (cs == CallState::Idle && now - lastNet > 30000) {
       lastNet = now;
-      pollNetwork();
+      if (pollNetwork()) {
+        silentPolls = 0;
+      } else if (++silentPolls >= 3) {
+        // Modem zawiesił się - restart, żeby nie przegapić rozmowy
+        Serial.println("[modem] brak odpowiedzi od 90 s, restart modemu");
+        setStatus([](Status& s) { s.ready = false; });
+        bus::post(Event(Ev::ModemFail));
+        pulsePwrkey(board::MODEM_RESET_ONLY ? 200 : 3000);  // wyłącz (lub reset)
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        while (!startup()) vTaskDelay(pdMS_TO_TICKS(30000));
+        silentPolls = 0;
+      }
     }
   }
 }
@@ -414,6 +478,21 @@ void setCallVolume(uint8_t level) {
   send(CmdType::Volume, b);
 }
 void powerOff() { send(CmdType::PowerOff); }
+void ringer(uint8_t level) {
+  Cmd c{};
+  c.t = CmdType::Ringer;
+  c.v[0] = level > 10 ? 10 : level;
+  xQueueSend(cmdQ, &c, pdMS_TO_TICKS(100));
+}
+void tone(uint16_t hz, uint16_t onMs, uint16_t offMs, uint16_t totalMs) {
+  Cmd c{};
+  c.t = CmdType::Tone;
+  c.v[0] = hz;
+  c.v[1] = onMs;
+  c.v[2] = offMs;
+  c.v[3] = totalMs;
+  xQueueSend(cmdQ, &c, 0);  // dźwięk klawisza nie może blokować interfejsu
+}
 void raw(const char* c) { send(CmdType::Raw, c); }
 void diag() { send(CmdType::Diag); }
 
@@ -452,6 +531,7 @@ const char* vendorName(Vendor v) {
   switch (v) {
     case Vendor::Simcom: return "SIMCom";
     case Vendor::Quectel: return "Quectel";
+    case Vendor::Sim800: return "SIM800 (2G)";
     default: return "nieznany";
   }
 }

@@ -8,6 +8,7 @@
 #include "core/ButtonFilter.h"
 #include "core/Calendar.h"
 #include "core/Config.h"
+#include "core/Pairing.h"
 #include "core/Weather.h"
 
 void setUp() {}
@@ -141,6 +142,19 @@ void test_numbers() {
   TEST_ASSERT_EQUAL_STRING("124", out);
 }
 
+void test_cbc() {
+  int mv;
+  TEST_ASSERT_TRUE(at::parseCbc("+CBC: 0,76,3987", mv));
+  TEST_ASSERT_EQUAL(3987, mv);
+  TEST_ASSERT_FALSE(at::parseCbc("+CBC: 0,0,0", mv));
+}
+
+void test_pairing() {
+  TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:LUMI-A1B2C3;P:12345678;;", pairing::wifiQr("LUMI-A1B2C3", "12345678").c_str());
+  TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:Dom\\;1\\:a;P:x\\\"y;;", pairing::wifiQr("Dom;1:a", "x\"y").c_str());
+  TEST_ASSERT_EQUAL_STRING("https://lumi.app/pair?d=LUMI-1&c=ABCD", pairing::pairUrl("https://lumi.app/", "LUMI-1", "ABCD").c_str());
+}
+
 // --- kalendarz i pogoda ---
 
 void test_calendar() {
@@ -224,6 +238,8 @@ int main() {
   RUN_TEST(test_csq_reg_cops);
   RUN_TEST(test_cclk);
   RUN_TEST(test_numbers);
+  RUN_TEST(test_cbc);
+  RUN_TEST(test_pairing);
   RUN_TEST(test_calendar);
   RUN_TEST(test_weather);
   RUN_TEST(test_config_parse);

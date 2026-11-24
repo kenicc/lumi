@@ -39,6 +39,7 @@ const Fonts& fonts();
 
 lv_obj_t* content();  // lewa część ekranu
 void clearContent();
+void setContentWide(bool wide);  // cały ekran (gdy pasek etykiet jest pusty, np. parowanie)
 
 // Pasek etykiet: slot 0 = prawy górny, 1 = środkowy, 2 = dolny
 void setRail(int slot, const char* icon, const char* text, Tone tone);

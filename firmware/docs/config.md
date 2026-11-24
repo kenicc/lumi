@@ -1,6 +1,6 @@
 # Konfiguracja urządzenia (JSON)
 
-Jeden dokument z numerem wersji. Rodzina zmienia go w aplikacji, urządzenie pobiera nową wersję i pokazuje, kto co zmienił. Do czasu aplikacji (etap 3) plik wgrywa się przez `pio run -t uploadfs` albo wkleja w konsoli komendą `config`.
+Jeden dokument z numerem wersji. Rodzina zmienia go w aplikacji, urządzenie pobiera nową wersję i pokazuje, kto co zmienił. Dokument przygotowuje aplikacja rodziny (`app/`), a urządzenie pobiera go z `/api/device/config`. Bez aplikacji można go wgrać przez `pio run -t uploadfs` albo wkleić w konsoli komendą `config`.
 
 Przykład: [`data/config.json`](../data/config.json). Brakujące pola dostają wartości domyślne, a błędny kontakt czy stacja są pomijane, nie psują reszty. Nieczytelny dokument jest odrzucany i zostaje poprzednia wersja (`/config.bak`).
 
@@ -29,4 +29,4 @@ Przykład: [`data/config.json`](../data/config.json). Brakujące pola dostają w
 | `access.locked[]` | [] | `"music"`, `"call"` - wyłączone przyciski |
 | `access.allowPowerOff` | true | false = włącznik nie wyłącza (osoba, która przypadkiem wyłącza telefon) |
 | `wifi[]` | - | `ssid`, `pass` |
-| `sync.url`, `sync.intervalSec` | - / 300 | adres dokumentu konfiguracji; tylko HTTPS z certyfikatem `/sync_ca.pem` |
+| `sync.intervalSec` | 20 | jak często LUMI pyta serwer aplikacji o zmiany (10-3600 s) |

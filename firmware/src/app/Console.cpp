@@ -10,6 +10,7 @@
 #include "hw/Battery.h"
 #include "hw/Input.h"
 #include "modem/Modem.h"
+#include "net/Identity.h"
 #include "net/Net.h"
 
 namespace console {
@@ -35,7 +36,10 @@ void help() {
       "  fm <MHz>          radio FM, np. fm 98.8; url <adres> radio internetowe; stop\n"
       "  config            wklej dokument konfiguracji JSON, zakoncz linia z kropka\n"
       "  cfg               podsumowanie konfiguracji; reload - wczytaj ponownie\n"
-      "  notice <tekst>    pokaz komunikat jak po zmianie od rodziny");
+      "  notice <tekst>    pokaz komunikat jak po zmianie od rodziny\n"
+      "  wifi <nazwa> <haslo>  dodaj siec Wi-Fi; provision - siec LUMI do konfiguracji z telefonu\n"
+      "  server <adres>    adres aplikacji rodziny, np. server https://lumi.vercel.app\n"
+      "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne");
 }
 
 void status() {
@@ -47,7 +51,8 @@ void status() {
                 s.registered ? "zarejestrowany" : "brak", s.op, s.lte ? "tak" : "nie", s.bars);
   Serial.printf("bateria: %u mV, %u%%, ladowanie: %s\n", battery::millivolts(), battery::percent(),
                 battery::charging() ? "tak" : "nie");
-  Serial.printf("wifi: %s\n", net::wifiConnected() ? "polaczone" : "brak");
+  Serial.printf("wifi: %s %s\n", net::wifiConnected() ? "polaczone" : "brak", net::wifiSsid().c_str());
+  Serial.printf("serwer: %s (%s)\n", identity::server().c_str(), net::cloudName(net::cloud()));
   audio::State a = audio::state();
   Serial.printf("audio: zrodlo %d, gra %d, glosnosc %u\n", (int)a.src, a.playing, a.volume);
   time_t t = time(nullptr);
@@ -120,6 +125,29 @@ void exec(char* l) {
   } else if (!strcmp(l, "cfg")) cfgSummary();
   else if (!strcmp(l, "reload")) Serial.println(app::reloadConfig(true) ? "ok" : "blad");
   else if (!strcmp(l, "notice")) app::showNotice(arg);
+  else if (!strcmp(l, "wifi")) {
+    char* pass = strchr(arg, ' ');
+    if (pass) *pass++ = 0;
+    if (!*arg) {
+      Serial.println("uzycie: wifi <nazwa> <haslo> (nazwa bez spacji; inaczej przez provision)");
+      return;
+    }
+    identity::addWifi(arg, pass ? pass : "");
+    app::reloadConfig(false);
+    Serial.println("zapisano siec");
+  } else if (!strcmp(l, "provision")) net::startProvisioning();
+  else if (!strcmp(l, "server")) {
+    identity::setServer(arg);
+    Serial.printf("serwer: %s (zadziala po restarcie lub przy nastepnej probie)\n", identity::server().c_str());
+  } else if (!strcmp(l, "pair")) {
+    Serial.printf("id: %s\nkod: %s\nlink: %s/pair?d=%s&c=%s\n", identity::id(), identity::pairCode(),
+                  identity::server().c_str(), identity::id(), identity::pairCode());
+  } else if (!strcmp(l, "factory")) {
+    Serial.println("przywracam ustawienia fabryczne...");
+    identity::factoryReset();
+    delay(200);
+    ESP.restart();
+  }
   else if (*l) Serial.println("nieznana komenda, wpisz help");
 }
 

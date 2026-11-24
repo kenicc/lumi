@@ -220,6 +220,8 @@ lv_obj_t* content() { return contentObj; }
 
 void clearContent() { lv_obj_clean(contentObj); }
 
+void setContentWide(bool wide) { lv_obj_set_width(contentObj, wide ? 320 : CONTENT_W); }
+
 void setRail(int i, const char* icon, const char* text, Tone tone) {
   if (i < 0 || i > 2) return;
   Slot& s = rail[i];

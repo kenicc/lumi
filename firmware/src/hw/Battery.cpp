@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "hw/Board.h"
+#include "modem/Modem.h"
 
 namespace battery {
 
@@ -13,6 +14,7 @@ uint16_t trendRef = 0;
 uint32_t trendAt = 0;
 bool chg = false;
 uint32_t lastPoll = 0;
+bool noDivider = false;  // dzielnik niepodłączony: napięcie bierzemy z modemu (SIM800 AT+CBC)
 
 // Krzywa Li-ion pod lekkim obciążeniem: (mV, %)
 const uint16_t kCurve[][2] = {{4150, 100}, {4050, 90}, {3950, 78}, {3870, 65}, {3800, 52}, {3750, 40},
@@ -29,6 +31,8 @@ uint16_t readMv() {
 void begin() {
   analogSetPinAttenuation(pins::BATTERY_ADC, ADC_11db);
   uint16_t mv = readMv();
+  noDivider = mv < 1000;
+  if (noDivider) Serial.println("[bateria] brak dzielnika na GPIO1 - napiecie z modemu, jesli je podaje");
   filtered = mv * 16;
   trendRef = mv;
   trendAt = millis();
@@ -39,6 +43,12 @@ void poll() {
   if (now - lastPoll < 2000) return;
   lastPoll = now;
   uint16_t mv = readMv();
+  if (noDivider) {
+    int m = modem::status().batteryMv;
+    if (m <= 0) return;
+    if (filtered < 16000) filtered = m * 16;  // pierwszy pomiar
+    mv = m;
+  }
   filtered = filtered - filtered / 16 + mv;  // wygładzanie wykładnicze
   if (now - trendAt > 120000) {
     uint16_t cur = millivolts();

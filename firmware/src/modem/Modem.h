@@ -1,6 +1,7 @@
 #pragma once
 // Rozmowy przez modem LTE (VoLTE) sterowany komendami AT po UART.
-// Jedna warstwa dla obu modemów: SIMCom A7670E (prototyp, KAmod) i Quectel EG915U-EU (seria).
+// Jedna warstwa dla modemów: SIMCom A7670E (KAmod), Quectel EG915U-EU (seria) i SIM800L
+// (prototyp z Allegro, tylko 2G - bez VoLTE).
 // Modem rozpoznawany automatycznie (ATI). Używamy tylko standardowych komend 3GPP
 // (ATD, ATA, AT+CHUP, AT+CLCC, AT+CLIP, AT+CLVL), różnice są w jednej tabeli w Modem.cpp.
 //
@@ -12,7 +13,7 @@
 
 namespace modem {
 
-enum class Vendor : uint8_t { Unknown, Simcom, Quectel };
+enum class Vendor : uint8_t { Unknown, Simcom, Quectel, Sim800 };
 
 struct Status {
   bool ready = false;
@@ -24,6 +25,7 @@ struct Status {
   bool registered = false;
   bool lte = false;
   char op[20] = {0};
+  int batteryMv = 0;  // SIM800: napięcie akumulatora z AT+CBC
 };
 
 void begin();  // uruchamia zadanie modemu na rdzeniu 1
@@ -33,6 +35,10 @@ void answer();
 void hangup();
 void setCallVolume(uint8_t level);  // 0..10, przeliczane na zakres AT+CLVL danego modemu
 void powerOff();                    // przed wyłączeniem LUMI
+
+// Dźwięk z modemu - tylko SIM800 (prototyp bez DAC): głośność dzwonka 0..10 i ton na głośniku modemu
+void ringer(uint8_t level);
+void tone(uint16_t hz, uint16_t onMs, uint16_t offMs, uint16_t totalMs);
 
 // Konsola serwisowa
 void raw(const char* cmd);  // wynik wypisywany na USB

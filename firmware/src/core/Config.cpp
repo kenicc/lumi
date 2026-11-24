@@ -167,8 +167,7 @@ bool parse(const char* json, size_t len, Config& out, std::string& err) {
     Wifi wf{str(o["ssid"]), str(o["pass"])};
     if (!wf.ssid.empty()) c.wifi.push_back(wf);
   }
-  c.syncUrl = str(doc["sync"]["url"]);
-  c.syncIntervalSec = clampv<int>(doc["sync"]["intervalSec"] | 300, 30, 3600);
+  c.syncIntervalSec = clampv<int>(doc["sync"]["intervalSec"] | 20, 10, 3600);
 
   out = std::move(c);
   return true;

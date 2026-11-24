@@ -2,14 +2,21 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <DNSServer.h>
 #include <HTTPClient.h>
 #include <LittleFS.h>
+#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WiFiMulti.h>
 
 #include "app/Events.h"
 #include "audio/AudioOut.h"
+#include "hw/Battery.h"
+#include "modem/Modem.h"
+#include "net/Identity.h"
+
+extern "C" const uint8_t lumi_ca_bundle[];
 
 namespace net {
 
@@ -17,18 +24,30 @@ namespace {
 
 SemaphoreHandle_t mtx;
 Settings cfgNet;
-bool cfgDirty = false;
+bool cfgDirty = true;
 wx::Forecast fc;
 volatile bool weatherReq = true;
-char devId[24];
+volatile bool reportReq = true;
+volatile bool provisionReq = false;
+volatile Cloud cloudState = Cloud::NoWifi;
 
 WiFiMulti* multi = nullptr;
 bool wifiOff = true;
-bool ntpStarted = false;
-uint32_t lastWeather = 0, lastSync = 0;
+bool ntpStarted = false, ntpPosted = false;
+bool helloDone = false;
+uint32_t lastWeather = 0, lastSync = 0, lastReport = 0, connectingSince = 0;
 
 constexpr uint32_t WEATHER_EVERY_MS = 30UL * 60 * 1000;
+constexpr uint32_t REPORT_EVERY_MS = 5UL * 60 * 1000;
+constexpr uint32_t PROVISION_AFTER_MS = 90UL * 1000;  // nieskonfigurowane i nie może się połączyć
+constexpr uint32_t PROVISION_WINDOW_MS = 5UL * 60 * 1000;
 constexpr const char* TZ_PL = "CET-1CEST,M3.5.0,M10.5.0/3";
+
+void setCloud(Cloud c) {
+  if (cloudState == c) return;
+  cloudState = c;
+  bus::post(Event(Ev::CloudState, (int32_t)c));
+}
 
 Settings snapshot() {
   xSemaphoreTake(mtx, portMAX_DELAY);
@@ -37,11 +56,247 @@ Settings snapshot() {
   return s;
 }
 
+std::vector<cfg::Wifi> allNetworks(const Settings& s) {
+  std::vector<cfg::Wifi> v = identity::wifi();  // dodane z telefonu mają pierwszeństwo
+  for (const auto& w : s.wifi) {
+    bool dup = false;
+    for (const auto& x : v) dup |= x.ssid == w.ssid;
+    if (!dup) v.push_back(w);
+  }
+  return v;
+}
+
 void rebuildWifi(const Settings& s) {
   delete multi;
   multi = new WiFiMulti();
-  for (const auto& w : s.wifi) multi->addAP(w.ssid.c_str(), w.pass.c_str());
+  for (const auto& w : allNetworks(s)) multi->addAP(w.ssid.c_str(), w.pass.c_str());
 }
+
+// ---------- konfiguracja Wi-Fi z telefonu (własna sieć LUMI) ----------
+
+WebServer* web = nullptr;
+DNSServer* dns = nullptr;
+uint32_t provisionUntil = 0;
+bool provisionSaved = false;
+
+String htmlEscape(const String& s) {
+  String o;
+  for (char c : s) {
+    if (c == '<') o += "&lt;";
+    else if (c == '>') o += "&gt;";
+    else if (c == '&') o += "&amp;";
+    else if (c == '"') o += "&quot;";
+    else o += c;
+  }
+  return o;
+}
+
+const char* kPageHead =
+    "<!doctype html><html lang=pl><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<title>LUMI</title><style>body{font:18px system-ui;margin:0;padding:20px;background:#0f1113;color:#f5f2ea}"
+    "h1{font-size:26px}label{display:block;margin:16px 0 6px}input,select,button{font:inherit;width:100%;"
+    "padding:12px;border-radius:10px;border:1px solid #555;box-sizing:border-box;background:#262a30;color:#f5f2ea}"
+    "button{background:#1e6b46;border:0;margin-top:22px;font-weight:700}small{color:#bdb8ad}</style>";
+
+void pageRoot() {
+  String ssids;
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_FAILED) WiFi.scanNetworks(true);
+  for (int i = 0; i < n && i < 20; i++) {
+    String s = htmlEscape(WiFi.SSID(i));
+    if (s.length() && ssids.indexOf("value=\"" + s + "\"") < 0) ssids += "<option value=\"" + s + "\">" + s + "</option>";
+  }
+  if (n >= 0) {
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true);  // odśwież w tle na następne wejście
+  }
+  String srv = htmlEscape(identity::server().c_str());
+  String h = kPageHead;
+  h += "<h1>LUMI " + String(identity::id()) + "</h1><p>Podaj domową sieć Wi-Fi. LUMI zapamięta ją i połączy się sama.</p>"
+       "<form method=post action=/save><label>Sieć</label><select name=s>" + ssids +
+       "</select><small>Nie widać sieci? Wpisz nazwę:</small><input name=s2 autocomplete=off>"
+       "<label>Hasło</label><input name=p type=password>"
+       "<details><summary><small>Zaawansowane</small></summary><label>Adres serwera aplikacji</label>"
+       "<input name=srv value=\"" + srv + "\"></details><button>Zapisz</button></form>";
+  web->send(200, "text/html; charset=utf-8", h);
+}
+
+void pageSave() {
+  String ssid = web->arg("s2").length() ? web->arg("s2") : web->arg("s");
+  String srv = web->arg("srv");
+  if (!ssid.length()) {
+    web->send(400, "text/plain; charset=utf-8", "Brak nazwy sieci");
+    return;
+  }
+  identity::addWifi(ssid.c_str(), web->arg("p").c_str());
+  if (srv.length()) identity::setServer(srv.c_str());
+  String h = kPageHead;
+  h += "<h1>Zapisano</h1><p>LUMI łączy się teraz z siecią <b>" + htmlEscape(ssid) +
+       "</b>. Wróć do zwykłego Wi-Fi w telefonie i zeskanuj kod z ekranu LUMI, żeby dodać je do aplikacji.</p>";
+  web->send(200, "text/html; charset=utf-8", h);
+  provisionSaved = true;
+  provisionUntil = millis() + 3000;  // daj czas na wysłanie odpowiedzi
+}
+
+void startAp() {
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(identity::id(), identity::apPassword());
+  WiFi.scanNetworks(true);
+  dns = new DNSServer();
+  dns->start(53, "*", WiFi.softAPIP());  // każda strona prowadzi do formularza
+  web = new WebServer(80);
+  web->on("/", HTTP_GET, pageRoot);
+  web->on("/save", HTTP_POST, pageSave);
+  web->onNotFound(pageRoot);
+  web->begin();
+  provisionSaved = false;
+  provisionUntil = millis() + PROVISION_WINDOW_MS;
+  wifiOff = false;
+  setCloud(Cloud::Provisioning);
+  Serial.printf("[wifi] siec konfiguracyjna %s, haslo %s, strona http://192.168.4.1\n", identity::id(),
+                identity::apPassword());
+}
+
+void stopAp() {
+  if (web) {
+    web->stop();
+    delete web;
+    web = nullptr;
+  }
+  if (dns) {
+    dns->stop();
+    delete dns;
+    dns = nullptr;
+  }
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  cfgDirty = true;  // nowe sieci
+  connectingSince = millis();
+  setCloud(Cloud::Connecting);
+}
+
+// ---------- serwer aplikacji ----------
+
+struct Resp {
+  int code = -1;
+  String body;
+};
+
+Resp request(const char* method, const char* path, const String& body, int version) {
+  Resp r;
+  std::string base = identity::server();
+  if (base.empty()) return r;
+  std::string url = base + path;
+  bool https = url.rfind("https://", 0) == 0;
+  WiFiClientSecure secure;
+  WiFiClient plain;
+  HTTPClient http;
+  http.setTimeout(10000);
+  http.setReuse(false);
+  if (https) {
+    secure.setCACertBundle(lumi_ca_bundle);  // weryfikacja certyfikatu serwera
+    if (!http.begin(secure, url.c_str())) return r;
+  } else {
+#ifdef LUMI_ALLOW_HTTP
+    if (!http.begin(plain, url.c_str())) return r;
+#else
+    Serial.println("[serwer] tylko HTTPS (LUMI_ALLOW_HTTP pozwala na HTTP do testow w sieci domowej)");
+    return r;
+#endif
+  }
+  http.addHeader("Authorization", String("Bearer ") + identity::secret());
+  http.addHeader("X-Lumi-Device", identity::id());
+  http.addHeader("X-Lumi-Version", String(version));
+  http.addHeader("Content-Type", "application/json");
+  r.code = strcmp(method, "GET") == 0 ? http.GET() : http.POST(body);
+  if (r.code > 0) r.body = http.getString();
+  http.end();
+  return r;
+}
+
+void hello(const Settings& s) {
+  JsonDocument d;
+  d["id"] = identity::id();
+  d["secret"] = identity::secret();
+  d["pair"] = identity::pairCode();
+  d["variant"] = LUMI_VARIANT;
+  d["fw"] = __DATE__;
+  String b;
+  serializeJson(d, b);
+  Resp r = request("POST", "/api/device/hello", b, s.version);
+  if (r.code == 200) {
+    helloDone = true;
+    JsonDocument o;
+    deserializeJson(o, r.body);
+    setCloud((o["claimed"] | false) ? Cloud::Ok : Cloud::Unclaimed);
+  } else if (r.code == 401 || r.code == 403) {
+    setCloud(Cloud::AuthError);
+    Serial.println("[serwer] sekret odrzucony - urzadzenie zarejestrowane z innym kluczem");
+  } else {
+    setCloud(Cloud::Offline);
+    Serial.printf("[serwer] hello: %d\n", r.code);
+  }
+}
+
+void syncConfig(const Settings& s) {
+  Resp r = request("GET", "/api/device/config", "", s.version);
+  if (r.code == 304) {
+    setCloud(Cloud::Ok);
+    return;
+  }
+  if (r.code == 404 || r.code == 409) {
+    setCloud(Cloud::Unclaimed);
+    return;
+  }
+  if (r.code == 401 || r.code == 403) {
+    setCloud(Cloud::AuthError);
+    helloDone = false;
+    return;
+  }
+  if (r.code != 200) {
+    setCloud(Cloud::Offline);
+    return;
+  }
+  setCloud(Cloud::Ok);
+  // sprawdzamy dokument tym samym parserem co przy starcie - zły plik nie trafi na dysk
+  cfg::Config test;
+  std::string err;
+  if (!cfg::parse(r.body.c_str(), r.body.length(), test, err)) {
+    Serial.printf("[serwer] odrzucona konfiguracja: %s\n", err.c_str());
+    return;
+  }
+  if (test.version <= s.version) return;
+  if (saveConfigFile(r.body.c_str(), r.body.length())) {
+    Serial.printf("[serwer] nowa konfiguracja v%d\n", test.version);
+    bus::post(Event(Ev::ConfigUpdated, test.version));
+  }
+}
+
+void report(const Settings& s) {
+  modem::Status m = modem::status();
+  JsonDocument d;
+  d["version"] = s.version;
+  d["variant"] = LUMI_VARIANT;
+  d["fw"] = __DATE__;
+  d["battery"] = battery::percent();
+  d["batteryMv"] = battery::millivolts();
+  d["charging"] = battery::charging();
+  d["signal"] = m.bars;
+  d["registered"] = m.registered;
+  d["lte"] = m.lte;
+  d["operator"] = m.op;
+  d["modem"] = modem::vendorName(m.vendor);
+  d["sim"] = m.simOk;
+  d["wifiRssi"] = WiFi.RSSI();
+  d["uptime"] = millis() / 1000;
+  String b;
+  serializeJson(d, b);
+  Resp r = request("POST", "/api/device/status", b, s.version);
+  if (r.code != 200) Serial.printf("[serwer] status: %d\n", r.code);
+}
+
+// ---------- pogoda ----------
 
 void fetchWeather(const Settings& s) {
   char url[256];
@@ -62,20 +317,17 @@ void fetchWeather(const Settings& s) {
   JsonDocument doc;
   DeserializationError e = deserializeJson(doc, http.getStream());
   http.end();
-  if (e) {
-    Serial.printf("[pogoda] JSON %s\n", e.c_str());
-    return;
-  }
+  if (e) return;
   wx::Forecast f;
   f.tempNow = doc["current"]["temperature_2m"] | 0.0f;
   f.codeNow = doc["current"]["weather_code"] | 0;
-  JsonObject d = doc["daily"];
+  JsonObject dd = doc["daily"];
   for (int i = 0; i < 2; i++) {
     wx::Day& day = i == 0 ? f.today : f.tomorrow;
-    day.code = d["weather_code"][i] | 0;
-    day.tMax = d["temperature_2m_max"][i] | 0.0f;
-    day.tMin = d["temperature_2m_min"][i] | 0.0f;
-    day.valid = !d["weather_code"][i].isNull();
+    day.code = dd["weather_code"][i] | 0;
+    day.tMax = dd["temperature_2m_max"][i] | 0.0f;
+    day.tMin = dd["temperature_2m_min"][i] | 0.0f;
+    day.valid = !dd["weather_code"][i].isNull();
   }
   f.valid = !doc["current"].isNull();
   f.fetchedAt = millis();
@@ -85,59 +337,22 @@ void fetchWeather(const Settings& s) {
   bus::post(Event(Ev::WeatherUpdated));
 }
 
-// Pobiera dokument konfiguracji. Zapisuje go tylko, gdy ma wyższą wersję niż obecna.
-void syncConfig(const Settings& s) {
-  bool https = s.syncUrl.rfind("https://", 0) == 0;
-  WiFiClientSecure secure;
-  WiFiClient plain;
-  HTTPClient http;
-  http.setTimeout(8000);
-  if (https) {
-    File ca = LittleFS.open("/sync_ca.pem", "r");
-    if (!ca) {
-      Serial.println("[sync] brak /sync_ca.pem - bez certyfikatu nie pobieram konfiguracji");
-      return;
-    }
-    String pem = ca.readString();
-    ca.close();
-    static String keep;  // WiFiClientSecure trzyma wskaźnik
-    keep = pem;
-    secure.setCACert(keep.c_str());
-    if (!http.begin(secure, s.syncUrl.c_str())) return;
-  } else {
-#ifndef LUMI_ALLOW_HTTP_SYNC
-    Serial.println("[sync] tylko HTTPS (LUMI_ALLOW_HTTP_SYNC pozwala na HTTP w sieci domowej do testow)");
-    return;
-#else
-    if (!http.begin(plain, s.syncUrl.c_str())) return;
-#endif
-  }
-  http.addHeader("X-Lumi-Device", devId);
-  http.addHeader("X-Lumi-Version", String(s.version));
-  int code = http.GET();
-  if (code != 200) {
-    if (code != 304) Serial.printf("[sync] HTTP %d\n", code);
-    http.end();
-    return;
-  }
-  String body = http.getString();
-  http.end();
-  JsonDocument doc;
-  if (deserializeJson(doc, body)) {
-    Serial.println("[sync] nieczytelny dokument, zostaje poprzednia konfiguracja");
-    return;
-  }
-  int v = doc["version"] | 0;
-  if (v <= s.version) return;
-  if (saveConfigFile(body.c_str(), body.length())) {
-    Serial.printf("[sync] nowa konfiguracja v%d\n", v);
-    bus::post(Event(Ev::ConfigUpdated, v));
-  }
-}
+// ---------- zadanie ----------
 
 void task(void*) {
   WiFi.mode(WIFI_OFF);
+  connectingSince = millis();
   for (;;) {
+    if (web) {  // tryb konfiguracji Wi-Fi
+      dns->processNextRequest();
+      web->handleClient();
+      if ((int32_t)(millis() - provisionUntil) >= 0) {
+        stopAp();
+        if (!provisionSaved) Serial.println("[wifi] koniec okna konfiguracji, probuje znanych sieci");
+      }
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
     vTaskDelay(pdMS_TO_TICKS(1000));
     Settings s = snapshot();
     xSemaphoreTake(mtx, portMAX_DELAY);
@@ -146,9 +361,17 @@ void task(void*) {
     xSemaphoreGive(mtx);
     if (dirty) rebuildWifi(s);
 
-    // Cisza elektryczna: radio FM gra, a nic nie potrzebuje sieci
-    bool quiet = audio::fmActive();
-    if (quiet || s.wifi.empty()) {
+    std::vector<cfg::Wifi> nets = allNetworks(s);
+    bool unconfigured = s.version == 0;
+    if (provisionReq || nets.empty()) {
+      provisionReq = false;
+      if (nets.empty()) setCloud(Cloud::NoWifi);
+      startAp();
+      continue;
+    }
+
+    // Cisza elektryczna: gra radio FM, a urządzenie jest już skonfigurowane
+    if (audio::fmActive() && !unconfigured) {
       if (!wifiOff) {
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
@@ -159,45 +382,86 @@ void task(void*) {
     if (wifiOff) {
       WiFi.mode(WIFI_STA);
       wifiOff = false;
+      connectingSince = millis();
     }
-    if (!multi) rebuildWifi(s);
-    if (multi->run(5000) != WL_CONNECTED) continue;
+    if (multi->run(5000) != WL_CONNECTED) {
+      setCloud(Cloud::Connecting);
+      if (unconfigured && millis() - connectingSince > PROVISION_AFTER_MS) startAp();  // np. złe hasło
+      continue;
+    }
+    connectingSince = millis();
 
     if (!ntpStarted) {
       configTzTime(TZ_PL, "pool.ntp.org", "time.google.com");
       ntpStarted = true;
     }
+    if (!ntpPosted && time(nullptr) > 1700000000) {
+      ntpPosted = true;
+      bus::post(Event(Ev::NetTime, 0, 0, "ntp"));
+    }
+
     uint32_t now = millis();
-    if (s.weather && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
+    if (identity::server().empty()) {
+      setCloud(Cloud::NoServer);
+    } else {
+      if (!helloDone && (now - lastSync > 15000 || !lastSync)) {
+        lastSync = now;
+        hello(s);
+      }
+      uint32_t every = (cloudState == Cloud::Unclaimed ? 5 : s.syncIntervalSec) * 1000UL;  // parowanie: szybciej
+      if (helloDone && (!lastSync || now - lastSync > every)) {
+        lastSync = now;
+        syncConfig(s);
+      }
+      if (helloDone && cloudState == Cloud::Ok && (reportReq || now - lastReport > REPORT_EVERY_MS)) {
+        reportReq = false;
+        lastReport = now;
+        report(snapshot());
+      }
+    }
+    if (s.weather && s.version > 0 && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
       weatherReq = false;
       lastWeather = now;
       fetchWeather(s);
-    }
-    if (!s.syncUrl.empty() && (!lastSync || now - lastSync > s.syncIntervalSec * 1000UL)) {
-      lastSync = now;
-      syncConfig(s);
     }
   }
 }
 
 }  // namespace
 
-void begin(const char* deviceId) {
-  strlcpy(devId, deviceId, sizeof devId);
+void begin() {
   mtx = xSemaphoreCreateMutex();
-  xTaskCreatePinnedToCore(task, "net", 8192, nullptr, 2, nullptr, 0);
+  xTaskCreatePinnedToCore(task, "net", 10240, nullptr, 2, nullptr, 0);
 }
 
 void apply(const Settings& s) {
   xSemaphoreTake(mtx, portMAX_DELAY);
   bool coordsChanged = s.lat != cfgNet.lat || s.lon != cfgNet.lon;
+  bool versionChanged = s.version != cfgNet.version;
   cfgNet = s;
   cfgDirty = true;
   xSemaphoreGive(mtx);
   if (coordsChanged) weatherReq = true;
+  if (versionChanged) reportReq = true;  // rodzina widzi w aplikacji, że zmiana dotarła
 }
 
 bool wifiConnected() { return WiFi.status() == WL_CONNECTED; }
+std::string wifiSsid() { return WiFi.SSID().c_str(); }
+Cloud cloud() { return cloudState; }
+
+const char* cloudName(Cloud c) {
+  switch (c) {
+    case Cloud::NoWifi: return "brak sieci Wi-Fi";
+    case Cloud::Provisioning: return "konfiguracja Wi-Fi z telefonu";
+    case Cloud::Connecting: return "laczenie z Wi-Fi";
+    case Cloud::NoServer: return "brak adresu serwera";
+    case Cloud::Offline: return "serwer nie odpowiada";
+    case Cloud::Unclaimed: return "czeka na dodanie w aplikacji";
+    case Cloud::Ok: return "polaczone z aplikacja";
+    case Cloud::AuthError: return "serwer odrzuca klucz";
+  }
+  return "?";
+}
 
 wx::Forecast forecast() {
   xSemaphoreTake(mtx, portMAX_DELAY);
@@ -207,6 +471,8 @@ wx::Forecast forecast() {
 }
 
 void refreshWeather() { weatherReq = true; }
+void reportSoon() { reportReq = true; }
+void startProvisioning() { provisionReq = true; }
 
 bool saveConfigFile(const char* json, size_t len) {
   File f = LittleFS.open("/config.tmp", "w");

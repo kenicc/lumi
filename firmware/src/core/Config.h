@@ -73,8 +73,7 @@ struct Config {
   bool allowPowerOff = true;
 
   std::vector<Wifi> wifi;
-  std::string syncUrl;
-  uint16_t syncIntervalSec = 300;
+  uint16_t syncIntervalSec = 20;  // jak często pytać serwer o zmiany (Wi-Fi)
 
   const Contact* contactById(const std::string& id) const;
   int contactIndexByNumber(const char* number) const;  // -1 gdy nieznany

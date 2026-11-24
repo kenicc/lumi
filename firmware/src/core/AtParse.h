@@ -34,6 +34,9 @@ bool parseCops(const char* line, char* op, size_t n, int& act);
 // "+CCLK: "26/11/24,22:31:05+04"" -> czas UTC (sekundy od 1970). Strefa w kwadransach.
 bool parseCclk(const char* line, int64_t& utc);
 
+// "+CBC: 0,76,3987" -> napięcie w mV (SIM800)
+bool parseCbc(const char* line, int& mv);
+
 // Porównanie numerów niezależnie od zapisu (+48, 0048, spacje): ostatnie 9 cyfr.
 bool sameNumber(const char* a, const char* b);
 
