@@ -17,6 +17,7 @@ ButtonFilter filters[(int)Key::Count];
 
 constexpr uint16_t POWER_LONG_MS = 3000;  // przytrzymanie 3 s = wyłącz
 constexpr uint16_t ONE_BUTTON_LONG_MS = 900;
+constexpr uint16_t HOME_SERVICE_MS = 5000;  // przytrzymanie Home 5 s = ekran serwisowy dla rodziny
 
 volatile int32_t wheelSteps = 0;
 volatile uint8_t wheelState = 0;
@@ -60,6 +61,7 @@ void configure(uint16_t minPressMs, uint16_t repeatIgnoreMs, bool oneButton) {
     t.repeatIgnoreMs = repeatIgnoreMs;
     if (i == (int)Key::Power) t.longMs = POWER_LONG_MS;
     if (i == (int)Key::Mid && oneButton) t.longMs = ONE_BUTTON_LONG_MS;
+    if (i == (int)Key::Home) t.longMs = HOME_SERVICE_MS;
     filters[i].setTiming(t);
   }
 }

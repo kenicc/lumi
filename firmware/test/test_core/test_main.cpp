@@ -1,4 +1,5 @@
 // Testy logiki niezależnej od sprzętu: pio test -e native
+#include <stdio.h>
 #include <string.h>
 #include <unity.h>
 
@@ -225,6 +226,33 @@ void test_config_broken() {
   TEST_ASSERT_FALSE(err.empty());
 }
 
+// Kontrakt z aplikacją rodziny: dokument wygenerowany przez app/src/lib/config.ts
+void test_contract() {
+  FILE* f = fopen("../shared/config-contract.json", "rb");
+  TEST_ASSERT_NOT_NULL_MESSAGE(f, "brak shared/config-contract.json");
+  std::string s;
+  char b[1024];
+  size_t n;
+  while ((n = fread(b, 1, sizeof b, f)) > 0) s.append(b, n);
+  fclose(f);
+  cfg::Config c;
+  std::string err;
+  TEST_ASSERT_TRUE_MESSAGE(cfg::parse(s.data(), s.size(), c, err), err.c_str());
+  TEST_ASSERT_EQUAL(7, c.version);
+  TEST_ASSERT_EQUAL_STRING("Ania", c.changedBy.c_str());
+  TEST_ASSERT_EQUAL(2, (int)c.contacts.size());
+  TEST_ASSERT_TRUE(c.contacts[0].autoAnswer);
+  TEST_ASSERT_EQUAL(0, c.contactIndexByNumber("600 100 200"));
+  TEST_ASSERT_EQUAL(cfg::SlotKind::Contact, c.home[0].kind);
+  TEST_ASSERT_EQUAL(3, (int)c.mediaList.size());
+  TEST_ASSERT_EQUAL(cfg::MediaType::Playlist, c.mediaList[2].type);
+  TEST_ASSERT_EQUAL_STRING("Ania", c.mediaList[2].from.c_str());
+  TEST_ASSERT_TRUE(c.lockMusic);
+  TEST_ASSERT_TRUE(c.inQuietHours(23 * 60));
+  TEST_ASSERT_EQUAL(1, (int)c.wifi.size());
+  TEST_ASSERT_EQUAL(20, c.syncIntervalSec);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_button_short_after_debounce);
@@ -244,5 +272,6 @@ int main() {
   RUN_TEST(test_weather);
   RUN_TEST(test_config_parse);
   RUN_TEST(test_config_broken);
+  RUN_TEST(test_contract);
   return UNITY_END();
 }

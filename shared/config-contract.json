@@ -1,0 +1,97 @@
+{
+  "version": 7,
+  "changedBy": "Ania",
+  "changeText": "dodała kontakt Basia",
+  "features": {
+    "calls": true,
+    "media": true,
+    "weather": true
+  },
+  "contacts": [
+    {
+      "id": "ania",
+      "name": "Ania",
+      "number": "+48600100200",
+      "color": "#3D8BFD",
+      "autoAnswer": true
+    },
+    {
+      "id": "basia",
+      "name": "Basia",
+      "number": "601200300",
+      "color": "#C2185B",
+      "autoAnswer": false
+    }
+  ],
+  "calls": {
+    "onlyContacts": false
+  },
+  "home": {
+    "slots": [
+      "contact:ania",
+      "media",
+      "weather"
+    ],
+    "partOfDay": true
+  },
+  "media": [
+    {
+      "type": "fm",
+      "name": "Jedynka",
+      "freq": 99.4
+    },
+    {
+      "type": "web",
+      "name": "Polskie Radio Chopin",
+      "url": "http://stream.polskieradio.pl/chopin"
+    },
+    {
+      "type": "playlist",
+      "name": "Piosenki od Ani",
+      "from": "Ania",
+      "urls": [
+        "https://example.com/a.mp3"
+      ]
+    }
+  ],
+  "weather": {
+    "place": "Kraków",
+    "lat": 50.06,
+    "lon": 19.94
+  },
+  "display": {
+    "textSize": 0,
+    "highContrast": false,
+    "brightness": 80,
+    "screenOffSec": 60
+  },
+  "sound": {
+    "ringVolume": 8,
+    "maxVolume": 10,
+    "startVolume": 5,
+    "keyClick": true,
+    "quiet": {
+      "from": "22:00",
+      "to": "07:00"
+    }
+  },
+  "access": {
+    "autoAnswerSec": 5,
+    "oneButton": false,
+    "minPressMs": 0,
+    "repeatIgnoreMs": 250,
+    "locked": [
+      "music"
+    ],
+    "allowPowerOff": true
+  },
+  "wifi": [
+    {
+      "ssid": "Dom",
+      "pass": "haslo123"
+    }
+  ],
+  "sync": {
+    "intervalSec": 20
+  }
+}

@@ -357,5 +357,13 @@ int main() {
   bus::post(Event(Ev::Wheel, 1));
   run(200);
   shot("19_allegro_dzwonek");
+  run(2500);
+
+  // ekran serwisowy (Home 5 s)
+  key(Key::Home, Ev::KeyLong);
+  shot("20_serwis");
+  cloudSim = net::Cloud::Unclaimed;
+  bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
+  shot("21_serwis_parowanie");
   return 0;
 }

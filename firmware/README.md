@@ -61,6 +61,8 @@ Do tego etapu wystarczy DevKit + płytka modemu + karta SIM, bez ekranu i przyci
 
 Interfejs da się testować bez przylutowanych przycisków: `key call`, `key mid`, `key power long`, `wheel 2`.
 
+Przytrzymanie Home przez 5 s otwiera ekran serwisowy dla rodziny: informacje o połączeniu, kod parowania (gdy LUMI zostało usunięte z aplikacji) i przycisk "Wi-Fi" uruchamiający sieć LUMI do podania nowej sieci (np. po przeprowadzce).
+
 ## Struktura
 
 | Katalog | Co robi |

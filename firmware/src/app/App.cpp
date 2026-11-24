@@ -31,7 +31,7 @@ namespace app {
 
 namespace {
 
-enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired };
+enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired, Service };
 enum class Phase : uint8_t { None, Incoming, Outgoing, Active };
 
 constexpr uint32_t POWER_LONG_MS = 3000;
@@ -509,6 +509,38 @@ void renderUnpaired() {
   if (sub) centerText(ui::label(col, F.small, P.dim, sub, true));
 }
 
+// Ekran serwisowy (Home 5 s): dla rodziny przy przeprowadzce lub ponownym dodaniu do aplikacji
+void renderService() {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  net::Cloud c = net::cloud();
+  lv_obj_t* col = ui::column(ui::content(), 4);
+  if (c == net::Cloud::Provisioning) {
+    ui::label(col, &lumi_b20, P.accent, "Wi-Fi z telefonu");
+    qrBox(col, pairing::wifiQr(identity::id(), identity::apPassword()), 120);
+    ui::label(col, &lumi_r20, P.text, "potem 192.168.4.1");
+  } else if (c == net::Cloud::Unclaimed) {
+    ui::label(col, &lumi_b20, P.accent, "Dodaj do aplikacji");
+    qrBox(col, pairing::pairUrl(identity::server(), identity::id(), identity::pairCode()), 120);
+    char code[24];
+    snprintf(code, sizeof code, "Kod: %s", identity::pairCode());
+    ui::label(col, &lumi_r20, P.text, code);
+  } else {
+    ui::label(col, &lumi_b20, P.accent, "Informacje");
+    ui::label(col, F.small, P.text, identity::id());
+    std::string w = net::wifiConnected() ? "Wi-Fi: " + net::wifiSsid() : "Wi-Fi: brak";
+    ui::label(col, F.small, P.text, w.c_str(), true);
+    ui::label(col, F.small, P.text, net::cloudName(c), true);
+    modem::Status m = modem::status();
+    char b[64];
+    snprintf(b, sizeof b, "%s, zasięg %d/4", modem::vendorName(m.vendor), m.bars);
+    ui::label(col, F.small, P.dim, b, true);
+  }
+  ui::setRail(0, IC_WIFI, "Wi-Fi", ui::Tone::Neutral);
+  ui::hideRail(1);
+  ui::setRail(2, IC_BACK, "Wróć", ui::Tone::Neutral);
+}
+
 void renderCall() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
@@ -571,6 +603,7 @@ void render() {
       case Screen::Weather: renderWeather(); break;
       case Screen::Confirm: renderConfirm(); break;
       case Screen::Unpaired: renderUnpaired(); break;
+      case Screen::Service: renderService(); break;
     }
   updateLive();
   firstHighlight();
@@ -732,6 +765,14 @@ void rightAction(int slot) {
       }
       break;
     case Screen::Unpaired: break;
+    case Screen::Service:
+      if (slot == 0) {
+        net::startProvisioning();
+        ui::toast("Sieć LUMI włączona na 5 minut");
+      } else if (slot == 2) {
+        go(haveConfig ? Screen::Home : Screen::Unpaired);
+      }
+      break;
   }
 }
 
@@ -833,6 +874,11 @@ void onKey(Key k, Ev type) {
       return;  // HoldStart
     }
     if (type == Ev::KeyShort) rightAction(slot);
+    return;
+  }
+  if (k == Key::Home && type == Ev::KeyLong && call.phase == Phase::None) {
+    audio::sound(audio::Sound::Confirm);
+    go(Screen::Service);
     return;
   }
   if (type != Ev::KeyShort) return;
@@ -1103,7 +1149,7 @@ void handle(const Event& e) {
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
     case Ev::CloudState:
-      if (call.phase == Phase::None && scr == Screen::Unpaired) render();
+      if (call.phase == Phase::None && (scr == Screen::Unpaired || scr == Screen::Service)) render();
       break;
     case Ev::MediaState:
       applyBacklight();  // FM -> podświetlenie bez PWM

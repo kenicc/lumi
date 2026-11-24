@@ -189,6 +189,9 @@ void begin() {
     lv_obj_align(s.icon, LV_ALIGN_TOP_MID, -6, 5);
 
     s.text = lv_label_create(s.box);
+    lv_label_set_long_mode(s.text, LV_LABEL_LONG_DOT);  // za długie imię kończy się "..."
+    lv_obj_set_width(s.text, RAIL_W - 12);
+    lv_obj_set_style_text_align(s.text, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s.text, LV_ALIGN_BOTTOM_MID, -6, -4);
 
     // Znak dotykowy przy krawędzi ekranu: kropka (górny), kreska (dolny), nic (środkowy)
