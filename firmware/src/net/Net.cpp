@@ -314,6 +314,58 @@ void report(const Settings& s) {
   if (r.code != 200) diag::error("[serwer] status: %d", r.code);
 }
 
+// ---------- zdjęcia kontaktów ----------
+
+volatile bool photosDirty = true;
+
+// Pobiera brakujące zdjęcia i usuwa te, których nie używa już żaden kontakt
+void syncPhotos(const Settings& s) {
+  if (!photosDirty) return;
+  LittleFS.mkdir("/ph");
+  bool changed = false, allOk = true;
+  for (const auto& h : s.photos) {
+    std::string path = photoPath(h);
+    if (LittleFS.exists(path.c_str())) continue;
+    std::string url = identity::server() + "/api/device/photo?h=" + h;
+    WiFiClientSecure secure;
+    WiFiClient plain;
+    HTTPClient http;
+    http.setTimeout(10000);
+    bool https = url.rfind("https://", 0) == 0;
+    if (https) secure.setCACertBundle(lumi_ca_bundle);
+    if (!(https ? http.begin(secure, url.c_str()) : http.begin(plain, url.c_str()))) continue;
+    http.addHeader("Authorization", String("Bearer ") + identity::secret());
+    http.addHeader("X-Lumi-Device", identity::id());
+    int code = http.GET();
+    if (code == 200 && (size_t)http.getSize() == PHOTO_BYTES) {
+      File f = LittleFS.open("/ph/tmp", "w");
+      int n = f ? http.writeToStream(&f) : -1;
+      f.close();
+      if (n == (int)PHOTO_BYTES && LittleFS.rename("/ph/tmp", path.c_str())) changed = true;
+      else {
+        LittleFS.remove("/ph/tmp");
+        allOk = false;
+      }
+    } else {
+      allOk = false;
+      diag::error("[zdjecia] %s: HTTP %d", h.c_str(), code);
+    }
+    http.end();
+  }
+  File dir = LittleFS.open("/ph");
+  std::vector<std::string> stale;
+  for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+    std::string name = f.name();  // samo "abc.565"
+    std::string hash = name.substr(0, name.find('.'));
+    bool used = false;
+    for (const auto& h : s.photos) used |= h == hash;
+    if (!used) stale.push_back("/ph/" + name);
+  }
+  for (const auto& p : stale) LittleFS.remove(p.c_str());
+  photosDirty = !allOk;  // nieudane spróbujemy przy następnym obiegu
+  if (changed) bus::post(Event(Ev::PhotosUpdated));
+}
+
 // ---------- zdarzenia ----------
 
 void flushEvents(const Settings& s) {
@@ -510,6 +562,7 @@ void task(void*) {
       }
     }
     if (helloDone && cloudState == Cloud::Ok) flushEvents(s);
+    if (helloDone && cloudState == Cloud::Ok) syncPhotos(s);
     if (helloDone && cloudState == Cloud::Ok && ota::enabled()) maybeUpdate(s);
     if (s.weather && s.version > 0 && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
       weatherReq = false;
@@ -535,6 +588,7 @@ void apply(const Settings& s) {
   xSemaphoreGive(mtx);
   if (coordsChanged) weatherReq = true;
   if (versionChanged) reportReq = true;  // rodzina widzi w aplikacji, że zmiana dotarła
+  if (versionChanged) photosDirty = true;
 }
 
 bool wifiConnected() { return WiFi.status() == WL_CONNECTED; }
@@ -573,6 +627,8 @@ void queueEvent(const std::string& json) {
   events.push_back(json);
   xSemaphoreGive(mtx);
 }
+
+std::string photoPath(const std::string& hash) { return "/ph/" + hash + ".565"; }
 
 bool saveConfigFile(const char* json, size_t len) {
   File f = LittleFS.open("/config.tmp", "w");

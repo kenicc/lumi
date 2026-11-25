@@ -31,7 +31,10 @@ export function SaveBar({ label = "Zapisz" }: { label?: string }) {
   );
 }
 
-export function Avatar({ name, color }: { name: string; color: string }) {
+export function Avatar({ name, color, photo, size = 44 }: { name: string; color: string; photo?: string; size?: number }) {
+  if (photo)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="avatar" src={photo} alt="" width={size} height={size} style={{ objectFit: "cover", width: size, height: size }} />;
   return (
     <span className="avatar" style={{ background: color }} aria-hidden>
       {Array.from(name)[0]?.toUpperCase() ?? "?"}

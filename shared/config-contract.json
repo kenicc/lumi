@@ -13,7 +13,8 @@
       "name": "Ania",
       "number": "+48600100200",
       "color": "#3D8BFD",
-      "autoAnswer": true
+      "autoAnswer": true,
+      "photo": "0123456789abcdef"
     },
     {
       "id": "basia",

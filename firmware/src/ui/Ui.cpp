@@ -274,7 +274,7 @@ lv_obj_t* label(lv_obj_t* parent, const lv_font_t* f, lv_color_t c, const char* 
   return l;
 }
 
-lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size) {
+lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size, const lv_image_dsc_t* photo) {
   lv_obj_t* c = lv_obj_create(parent);
   noScroll(c);
   lv_obj_set_size(c, size, size);
@@ -284,6 +284,14 @@ lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size) {
   lv_obj_set_style_border_width(c, P.highContrast ? 3 : 0, 0);
   lv_obj_set_style_border_color(c, P.text, 0);
   lv_obj_set_style_pad_all(c, 0, 0);
+  if (photo) {
+    lv_obj_set_style_clip_corner(c, true, 0);  // zdjęcie przycięte do koła
+    lv_obj_t* img = lv_image_create(c);
+    lv_image_set_src(img, photo);
+    if (size != (int)photo->header.w) lv_image_set_scale(img, 256 * size / photo->header.w);
+    lv_obj_center(img);
+    return c;
+  }
   // pierwsza litera imienia (UTF-8, np. "Ł")
   char initial[5] = {0};
   if (name && *name) {

@@ -12,6 +12,7 @@ struct Contact {
   std::string id, name, number;
   uint32_t color = 0x4CC38A;  // kolor kółka z inicjałem (zdjęcia w kolejnej wersji)
   bool autoAnswer = false;    // automatyczne odbieranie od tej osoby
+  std::string photo;          // skrót zdjęcia (16 znaków hex), plik /ph/<skrót>.565
 };
 
 enum class MediaType : uint8_t { Fm, Web, Playlist };

@@ -114,6 +114,12 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('firmware', 'firmware', true, 6291456)
 on conflict (id) do nothing;
 
+-- Zdjęcia kontaktów: PRYWATNY kosz. LUMI pobiera je przez /api/device/photo (z sekretem urządzenia),
+-- aplikacja pokazuje je tylko członkom rodziny (/d/<id>/foto/<skrót>).
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('photos', 'photos', false, 1048576)
+on conflict (id) do nothing;
+
 -- Muzyka od rodziny: publiczny kosz z losowymi nazwami plików (urządzenie pobiera MP3 bez logowania).
 -- Wgrywanie tylko przez podpisany adres wydawany przez serwer po sprawdzeniu roli.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

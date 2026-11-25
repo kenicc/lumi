@@ -101,6 +101,8 @@ bool parse(const char* json, size_t len, Config& out, std::string& err) {
     k.number = str(o["number"]);
     k.color = parseColor(o["color"] | "", k.color);
     k.autoAnswer = o["autoAnswer"] | false;
+    k.photo = str(o["photo"]);
+    if (k.photo.size() != 16 || k.photo.find_first_not_of("0123456789abcdef") != std::string::npos) k.photo.clear();
     if (k.name.empty() || k.number.empty()) continue;  // niepełny kontakt pomijamy, nie przerywamy
     if (k.id.empty()) k.id = k.name;
     c.contacts.push_back(k);

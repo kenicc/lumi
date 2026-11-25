@@ -259,6 +259,8 @@ void test_contract() {
   TEST_ASSERT_EQUAL_STRING("Ania", c.changedBy.c_str());
   TEST_ASSERT_EQUAL(2, (int)c.contacts.size());
   TEST_ASSERT_TRUE(c.contacts[0].autoAnswer);
+  TEST_ASSERT_EQUAL_STRING("0123456789abcdef", c.contacts[0].photo.c_str());
+  TEST_ASSERT_TRUE(c.contacts[1].photo.empty());
   TEST_ASSERT_EQUAL(0, c.contactIndexByNumber("600 100 200"));
   TEST_ASSERT_EQUAL(cfg::SlotKind::Contact, c.home[0].kind);
   TEST_ASSERT_EQUAL(3, (int)c.mediaList.size());

@@ -16,6 +16,7 @@ export const ContactSchema = z.object({
     .regex(/^\+?[0-9 ]{3,20}$/, "Numer może mieć tylko cyfry, spacje i + na początku"),
   color: hex.default("#3D8BFD"),
   autoAnswer: z.boolean().default(false),
+  photo: z.string().regex(/^[0-9a-f]{16}$/).optional(), // skrót zdjęcia (pliki w prywatnym koszu "photos")
 });
 
 const name = z.string().trim().min(1, "Podaj nazwę").max(40);

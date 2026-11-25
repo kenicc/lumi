@@ -25,6 +25,7 @@ enum class Ev : uint8_t {
   ConfigUpdated,  // nowy plik konfiguracji zapisany przez synchronizację
   MediaState,     // zmiana stanu odtwarzania
   CloudState,     // a = net::Cloud (Wi-Fi, parowanie, serwer)
+  PhotosUpdated,  // pobrano nowe zdjęcia kontaktów
 };
 
 struct Event {

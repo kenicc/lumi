@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 
 #include <deque>
+#include <map>
 #include <string>
 
 #include "app/Diag.h"
@@ -115,6 +116,63 @@ bool healthyMarked = false;  // etykieta odświeżana co sekundę (czas rozmowy,
 bool mediaOn() { return C.media && audio::hasMedia(); }
 
 uint8_t ringLevel() { return ringOverride ? ringOverride : C.ringVolume; }
+
+// ---------- zdjęcia kontaktów (pamięć podręczna w PSRAM) ----------
+
+std::map<std::string, lv_image_dsc_t*> photoCache;
+
+const lv_image_dsc_t* photoFor(const cfg::Contact* k) {
+  if (!k || k->photo.empty()) return nullptr;
+  auto it = photoCache.find(k->photo);
+  if (it != photoCache.end()) return it->second;  // nullptr = jeszcze nie pobrane
+  lv_image_dsc_t* dsc = nullptr;
+  File f = LittleFS.open(net::photoPath(k->photo).c_str(), "r");
+  if (f && f.size() == net::PHOTO_BYTES) {
+#ifdef BOARD_HAS_PSRAM
+    uint8_t* px = (uint8_t*)ps_malloc(net::PHOTO_BYTES);
+#else
+    uint8_t* px = (uint8_t*)malloc(net::PHOTO_BYTES);
+#endif
+    if (px && f.read(px, net::PHOTO_BYTES) == net::PHOTO_BYTES) {
+      dsc = new lv_image_dsc_t{};
+      dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+      dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+      dsc->header.w = 96;
+      dsc->header.h = 96;
+      dsc->header.stride = 96 * 2;
+      dsc->data_size = net::PHOTO_BYTES;
+      dsc->data = px;
+    } else {
+      free(px);
+    }
+  }
+  if (f) f.close();
+  photoCache[k->photo] = dsc;
+  return dsc;
+}
+
+// po zmianie konfiguracji: zwolnij zdjęcia, których nie używa już żaden kontakt
+void freeUnusedPhotos() {
+  for (auto it = photoCache.begin(); it != photoCache.end();) {
+    bool used = false;
+    for (const auto& k : C.contacts) used |= k.photo == it->first;
+    if (used) {
+      ++it;
+      continue;
+    }
+    if (it->second) {
+      lv_image_cache_drop(it->second);
+      free((void*)it->second->data);
+      delete it->second;
+    }
+    it = photoCache.erase(it);
+  }
+}
+
+void dropMissingPhotos() {  // po pobraniu nowych zdjęć: zapomnij "brak pliku"
+  for (auto it = photoCache.begin(); it != photoCache.end();)
+    it = it->second ? std::next(it) : photoCache.erase(it);
+}
 
 const cfg::Contact* contactAt(int i) { return (i >= 0 && i < (int)C.contacts.size()) ? &C.contacts[i] : nullptr; }
 
@@ -342,7 +400,7 @@ void renderContacts() {
   contactIdx = clampv<int>(contactIdx, 0, C.contacts.size() - 1);
   const cfg::Contact& k = C.contacts[contactIdx];
   lv_obj_t* col = centeredColumn();
-  ui::avatar(col, k.name.c_str(), k.color, 96);
+  ui::avatar(col, k.name.c_str(), k.color, 96, photoFor(&k));
   centerText(ui::label(col, ui::titleFont(k.name.c_str()), P.text, k.name.c_str(), true));
   char pos[24];
   snprintf(pos, sizeof pos, "%d z %d", contactIdx + 1, (int)C.contacts.size());
@@ -450,7 +508,7 @@ void renderConfirm() {
   const cfg::Contact* k = contactAt(confirmIdx);
   if (!k) return;
   lv_obj_t* col = centeredColumn();
-  ui::avatar(col, k->name.c_str(), k->color, 80);
+  ui::avatar(col, k->name.c_str(), k->color, 80, photoFor(k));
   ui::label(col, F.small, P.dim, "Zadzwonić do:");
   centerText(ui::label(col, ui::titleFont(k->name.c_str()), P.text, k->name.c_str(), true));
   ui::setRail(0, IC_PHONE, "Zadzwoń", ui::Tone::Yes);
@@ -594,7 +652,7 @@ void renderCall() {
   char name[40];
   callerName(name, sizeof name);
   lv_obj_t* col = centeredColumn();
-  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, 80);
+  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, 80, photoFor(k));
   centerText(ui::label(col, ui::titleFont(name), P.text, name, true));
   switch (call.phase) {
     case Phase::Incoming:
@@ -1147,6 +1205,9 @@ void applyConfig() {
   s.weather = C.weather;
   s.syncIntervalSec = C.syncIntervalSec;
   s.version = C.version;
+  for (const auto& k : C.contacts)
+    if (!k.photo.empty()) s.photos.push_back(k.photo);
+  freeUnusedPhotos();
   net::apply(s);
   applyBacklight();
 }
@@ -1299,6 +1360,10 @@ void handle(const Event& e) {
       break;
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
+    case Ev::PhotosUpdated:
+      dropMissingPhotos();
+      if (call.phase != Phase::None || scr == Screen::Contacts || scr == Screen::Confirm) render();
+      break;
     case Ev::CloudState:
       if (call.phase == Phase::None && (scr == Screen::Unpaired || scr == Screen::Service)) render();
       break;

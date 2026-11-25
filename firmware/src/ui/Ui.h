@@ -51,7 +51,8 @@ void setHighlight(int slot);  // tryb jednego przycisku, -1 = brak
 
 // Elementy treści
 lv_obj_t* label(lv_obj_t* parent, const lv_font_t* f, lv_color_t c, const char* text, bool wrap = false);
-lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size);
+// Kółko ze zdjęciem (96x96 RGB565) albo z inicjałem, gdy zdjęcia nie ma
+lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size, const lv_image_dsc_t* photo = nullptr);
 lv_obj_t* column(lv_obj_t* parent, int gap);
 bool fits(const char* text, const lv_font_t* f, int width);
 // Krój tytułu, a gdy tekst się nie mieści w jednej linii - mniejszy (bez łamania imion i numerów)

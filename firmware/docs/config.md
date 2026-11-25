@@ -9,7 +9,7 @@ Przykład: [`data/config.json`](../data/config.json). Brakujące pola dostają w
 | `version` | 0 | rośnie przy każdej zmianie; urządzenie bierze tylko wyższą |
 | `changedBy`, `changeText` | - | komunikat "Ania dodała kontakt Basia". Zdanie składa aplikacja, bo zna rodzaj gramatyczny; bez `changeText` urządzenie pisze "Ustawienia zmienione przez: Ania" |
 | `features.calls / media / weather` | true | widoczne funkcje |
-| `contacts[]` | - | `id`, `name`, `number`, `color` (#RRGGBB kółka z inicjałem), `autoAnswer` |
+| `contacts[]` | - | `id`, `name`, `number`, `color` (#RRGGBB kółka z inicjałem), `autoAnswer`, `photo` (skrót zdjęcia; LUMI pobiera je z `/api/device/photo`) |
 | `calls.onlyContacts` | false | odrzucaj numery spoza listy (ochrona przed oszustami "na wnuczka") |
 | `home.slots[3]` | - | co jest przy 3 prawych przyciskach na ekranie głównym: `contact:<id>`, `media`, `weather` albo pusty |
 | `home.partOfDay` | true | "Wtorek wieczorem" zamiast samego "Wtorek" |

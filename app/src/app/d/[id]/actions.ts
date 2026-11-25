@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireMember } from "@/lib/access";
 import { bool, move, newId, num, str } from "@/lib/form";
 import { CONTACT_COLORS, type Media } from "@/lib/schema";
+import { processPhoto } from "@/lib/photo";
 import { saveSettings } from "@/lib/store";
 import { admin } from "@/lib/supabase/admin";
 
@@ -220,4 +221,35 @@ export async function deleteDevice(id: string, fd: FormData) {
   await admin().from("devices").delete().eq("id", id);
   revalidatePath("/");
   redirect("/");
+}
+
+// ---------- zdjęcia kontaktów ----------
+
+export async function uploadContactPhoto(id: string, cid: string, fd: FormData) {
+  await requireMember(id, "contacts");
+  const back = p(id, `/kontakty?edit=${cid}`);
+  const file = fd.get("photo");
+  if (!(file instanceof File) || file.size === 0) redirect(`${back}&err=${encodeURIComponent("Wybierz zdjęcie")}`);
+  if (file.size > 3 * 1024 * 1024) redirect(`${back}&err=${encodeURIComponent("Zdjęcie jest za duże")}`);
+  let photo;
+  try {
+    photo = await processPhoto(Buffer.from(await file.arrayBuffer()));
+  } catch {
+    redirect(`${back}&err=${encodeURIComponent("To nie wygląda na zdjęcie. Spróbuj innego pliku.")}`);
+  }
+  const st = admin().storage.from("photos");
+  await st.upload(`${id}/${photo.hash}.565`, photo.rgb565, { contentType: "application/octet-stream", upsert: true });
+  await st.upload(`${id}/${photo.hash}.jpg`, photo.jpeg, { contentType: "image/jpeg", upsert: true });
+  return saveSettings(id, "contacts", (s) => {
+    const c = s.contacts.find((k) => k.id === cid);
+    if (!c) return "Nie ma takiego kontaktu";
+    c.photo = photo.hash;
+  }, p(id, "/kontakty"));
+}
+
+export async function removeContactPhoto(id: string, cid: string) {
+  return saveSettings(id, "contacts", (s) => {
+    const c = s.contacts.find((k) => k.id === cid);
+    if (c) delete c.photo;
+  }, p(id, "/kontakty"));
 }

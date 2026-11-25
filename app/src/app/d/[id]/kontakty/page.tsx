@@ -1,4 +1,5 @@
-import { addContact, deleteContact, moveContact, updateContact } from "../actions";
+import { addContact, deleteContact, moveContact, removeContactPhoto, updateContact } from "../actions";
+import { PhotoUpload } from "./PhotoUpload";
 import { requireMember } from "@/lib/access";
 import { CONTACT_COLORS, type Contact } from "@/lib/schema";
 import { currentSettings } from "@/lib/store";
@@ -65,6 +66,21 @@ export default async function Contacts({
             <button className="btn primary grow">Zapisz</button>
           </div>
         </form>
+      ) : null}
+      {editing ? (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Zdjęcie</h2>
+          <div className="row" style={{ marginBottom: 12 }}>
+            <Avatar name={editing.name} color={editing.color} size={96} photo={editing.photo && `/d/${id}/foto/${editing.photo}`} />
+            <p className="dim small grow">Na LUMI zdjęcie pojawia się przy rozmowie i na liście kontaktów. Twarz rozpoznaje się szybciej niż imię.</p>
+          </div>
+          <PhotoUpload id={id} cid={editing.id} />
+          {editing.photo && (
+            <form action={removeContactPhoto.bind(null, id, editing.id)} style={{ marginTop: 8 }}>
+              <button className="btn block danger">Usuń zdjęcie</button>
+            </form>
+          )}
+        </section>
       ) : (
         <>
           <ul className="list card">
@@ -72,7 +88,7 @@ export default async function Contacts({
             {s.contacts.map((c, i) => (
               <li key={c.id} className="row" style={{ padding: "8px 0" }}>
                 <a href={`?edit=${c.id}`} className="row grow" style={{ textDecoration: "none" }} aria-label={`Zmień ${c.name}`}>
-                  <Avatar name={c.name} color={c.color} />
+                  <Avatar name={c.name} color={c.color} photo={c.photo && `/d/${id}/foto/${c.photo}`} />
                   <span className="grow">
                     <b>{c.name}</b> {c.autoAnswer && <span className="badge">auto</span>}{" "}
                     {s.home.slots.includes(`contact:${c.id}`) && <span className="badge ok">ekran</span>}

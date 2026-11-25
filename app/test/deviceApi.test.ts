@@ -10,6 +10,7 @@ const { POST: hello } = await import("@/app/api/device/hello/route");
 const { GET: config } = await import("@/app/api/device/config/route");
 const { POST: status } = await import("@/app/api/device/status/route");
 const { GET: firmware } = await import("@/app/api/device/firmware/route");
+const { GET: photo } = await import("@/app/api/device/photo/route");
 
 const ID = "LUMI-C3D4E5";
 const SECRET = "a".repeat(64);
@@ -81,6 +82,21 @@ describe("API urządzenia", () => {
     await status(post("/api/device/status", { version: 0, build: 6 }));
     r = await firmware(get("/api/device/firmware"));
     expect(r.status).toBe(204);
+  });
+
+  it("zdjęcia: tylko z własnych kontaktów urządzenia", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR, variant: "allegro" }));
+    const h = "0123456789abcdef";
+    Object.assign(db.tables.devices[0], { settings: { contacts: [{ id: "a", name: "Ania", number: "600100200", color: "#3D8BFD", autoAnswer: false, photo: h }] } });
+    await db.client.storage.from("photos").upload(`${ID}/${h}.565`, Buffer.alloc(18432, 7));
+    await db.client.storage.from("photos").upload(`LUMI-FFFFFF/fedcba9876543210.565`, Buffer.alloc(18432, 1));
+    let r = await photo(get(`/api/device/photo?h=${h}`));
+    expect(r.status).toBe(200);
+    expect((await r.arrayBuffer()).byteLength).toBe(18432);
+    r = await photo(get(`/api/device/photo?h=fedcba9876543210`)); // cudze zdjęcie
+    expect(r.status).toBe(404);
+    r = await photo(get(`/api/device/photo?h=${h}`, headers("b".repeat(64))));
+    expect(r.status).toBe(401);
   });
 
   it("odrzuca zły format danych", async () => {

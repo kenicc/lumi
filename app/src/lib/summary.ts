@@ -29,7 +29,13 @@ export function summarize(prev: Settings, next: Settings, form: Form): string {
   const removed = prev.contacts.filter((c) => !nextIds.has(c.id)).map((c) => c.name);
   if (added.length) parts.push(`${v("add")} ${added.length > 1 ? "kontakty" : "kontakt"} ${list(added)}`);
   if (removed.length) parts.push(`${v("remove")} ${removed.length > 1 ? "kontakty" : "kontakt"} ${list(removed)}`);
-  if (!added.length && !removed.length && !same(prev.contacts, next.contacts)) parts.push(`${v("change")} kontakty`);
+  if (!added.length && !removed.length && !same(prev.contacts, next.contacts)) {
+    const noPhoto = (cs: Settings["contacts"]) => cs.map(({ photo: _p, ...c }) => c);
+    const withNewPhoto = next.contacts.filter((c) => c.photo && prev.contacts.find((p) => p.id === c.id)?.photo !== c.photo);
+    if (same(noPhoto(prev.contacts), noPhoto(next.contacts)) && withNewPhoto.length)
+      parts.push(`${v("add")} zdjęcie: ${list(withNewPhoto.map((c) => c.name))}`);
+    else parts.push(`${v("change")} kontakty`);
+  }
 
   const key = (m: Media) => `${m.type}:${m.name}`;
   const prevM = new Set(prev.media.map(key));

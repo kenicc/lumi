@@ -30,6 +30,12 @@ describe("summarize", () => {
     b.contacts.reverse();
     expect(summarize(a, b, "n")).toBe("zmienia kontakty");
   });
+  it("nowe zdjęcie kontaktu", () => {
+    const a = sample();
+    const b = sample();
+    b.contacts[1].photo = "fedcba9876543210";
+    expect(summarize(a, b, "f")).toBe("dodała zdjęcie: Basia");
+  });
   it("parowanie", () => {
     expect(pairedText("f")).toBe("połączyła LUMI z aplikacją");
   });

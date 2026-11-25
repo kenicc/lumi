@@ -110,5 +110,32 @@ export function memoryDb() {
     };
     return q;
   }
-  return { tables, client: { from: query } };
+  // magazyn plików w pamięci (kosze Supabase Storage)
+  const files = new Map<string, Buffer>();
+  const storage = {
+    from(bucket: string) {
+      const key = (p: string) => `${bucket}/${p}`;
+      return {
+        async upload(p: string, data: Buffer | Uint8Array) {
+          files.set(key(p), Buffer.from(data));
+          return { data: { path: p }, error: null };
+        },
+        async download(p: string) {
+          const b = files.get(key(p));
+          return b ? { data: new Blob([new Uint8Array(b)]), error: null } : { data: null, error: { message: "not found" } };
+        },
+        async remove(paths: string[]) {
+          paths.forEach((p) => files.delete(key(p)));
+          return { data: null, error: null };
+        },
+        async createSignedUploadUrl(p: string) {
+          return { data: { path: p, token: "demo" }, error: null };
+        },
+        getPublicUrl(p: string) {
+          return { data: { publicUrl: `https://demo.invalid/${key(p)}` } };
+        },
+      };
+    },
+  };
+  return { tables, files, client: { from: query, storage } };
 }

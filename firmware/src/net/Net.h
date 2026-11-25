@@ -30,6 +30,7 @@ struct Settings {
   bool weather = true;
   uint16_t syncIntervalSec = 20;
   int version = 0;
+  std::vector<std::string> photos;  // skróty zdjęć kontaktów do pobrania
 };
 
 void begin();
@@ -48,5 +49,9 @@ void checkUpdateNow();
 void queueEvent(const std::string& json);  // konsola: sprawdź i zainstaluj aktualizację od razu (bez czekania na noc)
 
 bool saveConfigFile(const char* json, size_t len);
+
+// Ścieżka zdjęcia kontaktu w LittleFS (96x96 RGB565, 18 432 B)
+std::string photoPath(const std::string& hash);
+constexpr size_t PHOTO_BYTES = 96 * 96 * 2;
 
 }  // namespace net

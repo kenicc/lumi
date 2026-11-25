@@ -112,6 +112,7 @@ const char* cloudName(Cloud) { return ""; }
 void reportSoon() {}
 void startProvisioning() {}
 void queueEvent(const std::string& j) { printf("zdarzenie: %s\n", j.c_str()); }
+std::string photoPath(const std::string& h) { return "/ph/" + h + ".565"; }
 wx::Forecast forecast() { return fc; }
 void refreshWeather() {}
 bool saveConfigFile(const char*, size_t) { return true; }
@@ -261,6 +262,8 @@ int main() {
 
   // 2. Konfiguracja przykładowa
   std::string base = readFile("data/config.json");
+  // zdjęcie Ani przygotowane tym samym potokiem co na serwerze (sim/build.sh -> sim/out/cfg/ph)
+  replace(base, "\"color\": \"#3D8BFD\", \"autoAnswer\": true", "\"color\": \"#3D8BFD\", \"autoAnswer\": true, \"photo\": \"0123456789abcdef\"");
   writeCfg("sim/out/cfg", base);
   LittleFS.root = "sim/out/cfg";
   app::reloadConfig(false);

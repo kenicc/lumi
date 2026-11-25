@@ -3,7 +3,7 @@ import { defaultSettings, type Settings } from "@/lib/schema";
 export function sample(): Settings {
   const s = defaultSettings();
   s.contacts = [
-    { id: "ania", name: "Ania", number: "+48 600 100 200", color: "#3D8BFD", autoAnswer: true },
+    { id: "ania", name: "Ania", number: "+48 600 100 200", color: "#3D8BFD", autoAnswer: true, photo: "0123456789abcdef" },
     { id: "basia", name: "Basia", number: "601200300", color: "#C2185B", autoAnswer: false },
   ];
   s.home.slots = ["contact:ania", "media", "weather"];
