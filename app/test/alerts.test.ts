@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { statusAlerts } from "@/lib/alerts";
-import { fakeDb } from "./fakeDb";
+import { memoryDb as fakeDb } from "@/lib/memoryDb";
 
 describe("statusAlerts", () => {
   it("bateria: tylko przy przejściu progu i bez ładowarki", () => {

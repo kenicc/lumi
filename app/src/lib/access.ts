@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { DEMO, DEMO_USER } from "./demo";
 import { admin } from "./supabase/admin";
 import { supabaseServer } from "./supabase/server";
 import type { DeviceRow, Role } from "./types";
@@ -22,6 +23,7 @@ export function can(role: Role, section: Section) {
 }
 
 export async function currentUser() {
+  if (DEMO) return DEMO_USER as unknown as Awaited<ReturnType<Awaited<ReturnType<typeof supabaseServer>>["auth"]["getUser"]>>["data"]["user"];
   const sb = await supabaseServer();
   const { data } = await sb.auth.getUser();
   return data.user;

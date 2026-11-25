@@ -1,12 +1,14 @@
-// Atrapa klienta Supabase w pamięci - tylko metody używane przez trasy API urządzenia
+// Baza w pamięci udająca klienta Supabase - tylko metody używane przez aplikację.
+// Używana w testach i w trybie demo (LUMI_DEMO=1).
 type Row = Record<string, unknown>;
 
-export function fakeDb() {
+export function memoryDb() {
   const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [] };
 
   function query(table: string) {
     const filters: ((r: Row) => boolean)[] = [];
-    let op: "select" | "update" | "insert" | "delete" = "select";
+    let op: "select" | "update" | "insert" | "delete" | "upsert" = "select";
+    let conflict: string[] = [];
     let payload: Row | Row[] = {};
     let head = false;
     let sortBy: { k: string; asc: boolean } | null = null;
@@ -51,6 +53,16 @@ export function fakeDb() {
         payload = p;
         return q;
       },
+      upsert(p: Row, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+        op = "upsert";
+        payload = p;
+        conflict = opts?.onConflict?.split(",") ?? [Object.keys(p)[0]];
+        return q;
+      },
+      ilike(k: string, v: string) {
+        filters.push((r) => String(r[k] ?? "").toLowerCase() === v.toLowerCase());
+        return q;
+      },
       delete() {
         op = "delete";
         return q;
@@ -72,6 +84,13 @@ export function fakeDb() {
         const list = Array.isArray(payload) ? payload : [payload];
         tables[table].push(...list.map((r) => ({ ...r })));
         return list;
+      }
+      if (op === "upsert") {
+        const p = payload as Row;
+        const hit = tables[table].find((r) => conflict.every((c) => r[c] === p[c]));
+        if (hit) Object.assign(hit, p);
+        else tables[table].push({ ...p });
+        return [p];
       }
       const matched = rows();
       if (op === "update") matched.forEach((r) => Object.assign(r, payload));

@@ -1,6 +1,6 @@
 // Protokół urządzenia (firmware/src/net/Net.cpp) przeciw prawdziwym trasom API na atrapie bazy
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fakeDb } from "./fakeDb";
+import { memoryDb as fakeDb } from "@/lib/memoryDb";
 
 vi.mock("server-only", () => ({}));
 const db = fakeDb();

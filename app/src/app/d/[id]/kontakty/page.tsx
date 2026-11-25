@@ -4,7 +4,7 @@ import { CONTACT_COLORS, type Contact } from "@/lib/schema";
 import { currentSettings } from "@/lib/store";
 import { Avatar, Flash, Top, type SP } from "@/components/ui";
 
-function ContactFields({ c, guardian, autoSec }: { c?: Contact; guardian: boolean; autoSec: number }) {
+function ContactFields({ c, guardian, autoSec, defColor }: { c?: Contact; guardian: boolean; autoSec: number; defColor?: string }) {
   return (
     <>
       <label htmlFor="name">Imię na przycisku</label>
@@ -14,9 +14,9 @@ function ContactFields({ c, guardian, autoSec }: { c?: Contact; guardian: boolea
       <input id="number" name="number" type="tel" required defaultValue={c?.number} placeholder="+48 600 100 200" />
       <label>Kolor kółka</label>
       <div className="row" style={{ flexWrap: "wrap" }}>
-        {CONTACT_COLORS.map((col, i) => (
+        {CONTACT_COLORS.map((col) => (
           <label key={col} className="check" style={{ margin: 0, minHeight: 0 }}>
-            <input type="radio" name="color" value={col} defaultChecked={(c?.color ?? CONTACT_COLORS[0]) === col || (!c && i === 0)} />
+            <input type="radio" name="color" value={col} defaultChecked={(c?.color ?? defColor ?? CONTACT_COLORS[0]) === col} />
             <span className="avatar" style={{ background: col, width: 32, height: 32 }} />
           </label>
         ))}
@@ -53,7 +53,7 @@ export default async function Contacts({
     <main>
       <Top back={{ href: `/d/${id}`, label: device.name ?? id }} />
       <h1>Kontakty</h1>
-      <p className="dim">Ta kolejność jest pod przyciskiem Dzwoń. Najważniejsze osoby na górze.</p>
+      <p className="dim">Ta kolejność jest pod przyciskiem Dzwoń. Najważniejsze osoby na górze. Dotknij osoby, żeby ją zmienić.</p>
       <Flash ok={ok} err={err} />
 
       {editing ? (
@@ -70,27 +70,34 @@ export default async function Contacts({
           <ul className="list card">
             {s.contacts.length === 0 && <li className="dim" style={{ padding: 8 }}>Brak kontaktów.</li>}
             {s.contacts.map((c, i) => (
-              <li key={c.id} className="row" style={{ padding: "10px 0" }}>
-                <Avatar name={c.name} color={c.color} />
-                <div className="grow">
-                  <b>{c.name}</b> {c.autoAnswer && <span className="badge">auto</span>}{" "}
-                  {s.home.slots.includes(`contact:${c.id}`) && <span className="badge ok">ekran główny</span>}
-                  <div className="dim small">{c.number}</div>
-                </div>
-                <form action={moveContact.bind(null, id, c.id, -1)}>
-                  <button className="btn small" disabled={i === 0} aria-label={`Przesuń ${c.name} wyżej`}>↑</button>
-                </form>
-                <form action={moveContact.bind(null, id, c.id, 1)}>
-                  <button className="btn small" disabled={i === s.contacts.length - 1} aria-label={`Przesuń ${c.name} niżej`}>↓</button>
-                </form>
-                <a className="btn small" href={`?edit=${c.id}`}>Zmień</a>
+              <li key={c.id} className="row" style={{ padding: "8px 0" }}>
+                <a href={`?edit=${c.id}`} className="row grow" style={{ textDecoration: "none" }} aria-label={`Zmień ${c.name}`}>
+                  <Avatar name={c.name} color={c.color} />
+                  <span className="grow">
+                    <b>{c.name}</b> {c.autoAnswer && <span className="badge">auto</span>}{" "}
+                    {s.home.slots.includes(`contact:${c.id}`) && <span className="badge ok">ekran</span>}
+                    <span className="dim small" style={{ display: "block", whiteSpace: "nowrap" }}>{c.number}</span>
+                  </span>
+                </a>
+                <span className="updown">
+                  <form action={moveContact.bind(null, id, c.id, -1)}>
+                    <button className="btn small" disabled={i === 0} aria-label={`Przesuń ${c.name} wyżej`}>↑</button>
+                  </form>
+                  <form action={moveContact.bind(null, id, c.id, 1)}>
+                    <button className="btn small" disabled={i === s.contacts.length - 1} aria-label={`Przesuń ${c.name} niżej`}>↓</button>
+                  </form>
+                </span>
               </li>
             ))}
           </ul>
           <details className="card">
             <summary>Dodaj kontakt</summary>
             <form action={addContact.bind(null, id)}>
-              <ContactFields guardian={guardian} autoSec={s.access.autoAnswerSec} />
+              <ContactFields
+                guardian={guardian}
+                autoSec={s.access.autoAnswerSec}
+                defColor={CONTACT_COLORS.find((col) => !s.contacts.some((k) => k.color === col)) ?? CONTACT_COLORS[s.contacts.length % CONTACT_COLORS.length]}
+              />
               {s.home.slots.includes("") && (
                 <label className="check">
                   <input type="checkbox" name="onHome" defaultChecked /> Dodaj też przycisk na ekranie głównym

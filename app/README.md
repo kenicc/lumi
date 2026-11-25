@@ -2,6 +2,19 @@
 
 Aplikacja webowa instalowana na telefonie jak zwykła aplikacja (PWA): jedna dla Androida, iPhone'a i komputera, bez sklepów. Next.js 15 + Supabase (logowanie, baza, pliki muzyki).
 
+| Urządzenie | Kontakty | Ekran główny | Wygląd i dźwięk |
+| --- | --- | --- | --- |
+| ![](docs/ekrany/02_urzadzenie.png) | ![](docs/ekrany/03_kontakty.png) | ![](docs/ekrany/04_ekran.png) | ![](docs/ekrany/06_wyglad.png) |
+
+## Wypróbuj bez Supabase (tryb demo)
+
+```bash
+npm install
+LUMI_DEMO=1 NEXT_PUBLIC_SUPABASE_URL=https://demo.invalid NEXT_PUBLIC_SUPABASE_ANON_KEY=x SUPABASE_SERVICE_ROLE_KEY=x npm run dev
+```
+
+Otwórz http://localhost:3000. Jesteś zalogowana jako Ania, opiekunka LUMI "Mama". Dane leżą w pamięci i znikają po restarcie. Zapisy przechodzą przez te same akcje serwera i walidację co w prawdziwej wersji. Tego trybu nie włączaj na serwerze publicznym.
+
 ## Co umie
 
 - **Logowanie kodem z e-maila**, bez hasła. Kod zamiast linku, bo link na iPhonie otwiera Safari, a nie zainstalowaną aplikację.

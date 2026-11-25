@@ -80,3 +80,5 @@ input[type=color] { width: 56px; height: 44px; border: 0; background: none; padd
 .segmented input:checked + span { border-color: var(--accent); background: var(--accent-bg); font-weight: 700; }
 .segmented input:focus-visible + span { outline: 3px solid var(--accent); }
 details summary { cursor: pointer; padding: 8px 0; font-weight: 700; }
+.updown { display: flex; flex-direction: column; gap: 4px; }
+.updown .btn.small { min-height: 34px; width: 44px; padding: 0; }
