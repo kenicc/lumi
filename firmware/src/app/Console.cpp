@@ -43,6 +43,7 @@ void help() {
       "  wifi <nazwa> <haslo>  dodaj siec Wi-Fi; provision - siec LUMI do konfiguracji z telefonu\n"
       "  server <adres>    adres aplikacji rodziny, np. server https://lumi.vercel.app\n"
       "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne\n"
+      "  remind <tekst>    pokaz przypomnienie teraz (test)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)");
 }
 
@@ -149,6 +150,8 @@ void exec(char* l) {
   } else if (!strcmp(l, "pair")) {
     Serial.printf("id: %s\nkod: %s\nlink: %s/pair?d=%s&c=%s\n", identity::id(), identity::pairCode(),
                   identity::server().c_str(), identity::id(), identity::pairCode());
+  } else if (!strcmp(l, "remind")) {
+    app::testReminder(*arg ? arg : "Weź leki");
   } else if (!strcmp(l, "ota")) {
     Serial.println(ota::enabled() ? "sprawdzam aktualizacje..." : "aktualizacje wylaczone: brak klucza (tools/gen_ota_key.py)");
     net::checkUpdateNow();

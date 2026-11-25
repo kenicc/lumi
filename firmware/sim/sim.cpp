@@ -111,6 +111,7 @@ Cloud cloud() { return cloudSim; }
 const char* cloudName(Cloud) { return ""; }
 void reportSoon() {}
 void startProvisioning() {}
+void queueEvent(const std::string& j) { printf("zdarzenie: %s\n", j.c_str()); }
 wx::Forecast forecast() { return fc; }
 void refreshWeather() {}
 bool saveConfigFile(const char*, size_t) { return true; }
@@ -373,5 +374,18 @@ int main() {
   cloudSim = net::Cloud::Unclaimed;
   bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
   shot("21_serwis_parowanie");
+  key(Key::Bottom);
+
+  // przypomnienie od rodziny
+  app::testReminder("Weź leki na ciśnienie");
+  run(500);
+  shot("22_przypomnienie");
+  bus::post(Event(Ev::CallIncoming, 0, 0, "+48601200300"));
+  run(500);
+  bus::post(Event(Ev::CallEnded, 1));
+  run(500);
+  shot("23_przypomnienie_po_rozmowie");
+  key(Key::Top);
+  shot("24_po_potwierdzeniu");
   return 0;
 }

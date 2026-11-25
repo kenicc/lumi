@@ -31,6 +31,17 @@ struct HomeSlot {
   std::string contactId;
 };
 
+// Przypomnienie od rodziny, np. "Weź leki" o 8:00 w dni robocze
+struct Reminder {
+  std::string id, text;
+  int minute = 0;          // minuta doby, 0..1439
+  uint8_t days = 0x7F;     // bit 0 = poniedziałek ... bit 6 = niedziela
+  bool confirm = true;     // czekaj na "Zrobione" i powiadom rodzinę, gdy brak potwierdzenia
+};
+
+// Czy przypomnienie wypada w tej minucie. wday jak w tm: 0 = niedziela.
+bool reminderDue(const Reminder& r, int wday, int minuteOfDay);
+
 struct Wifi {
   std::string ssid, pass;
 };
@@ -74,6 +85,8 @@ struct Config {
 
   std::vector<Wifi> wifi;
   uint16_t syncIntervalSec = 20;  // jak często pytać serwer o zmiany (Wi-Fi)
+
+  std::vector<Reminder> reminders;
 
   const Contact* contactById(const std::string& id) const;
   int contactIndexByNumber(const char* number) const;  // -1 gdy nieznany

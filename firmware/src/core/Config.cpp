@@ -62,6 +62,11 @@ int Config::contactIndexByNumber(const char* number) const {
   return -1;
 }
 
+bool reminderDue(const Reminder& r, int wday, int minuteOfDay) {
+  int bit = (wday + 6) % 7;  // tm: 0 = niedziela -> bit 6
+  return r.minute == minuteOfDay && (r.days & (1 << bit));
+}
+
 bool Config::inQuietHours(int m) const {
   if (quietFrom < 0 || quietTo < 0 || quietFrom == quietTo) return false;
   if (quietFrom < quietTo) return m >= quietFrom && m < quietTo;
@@ -168,6 +173,22 @@ bool parse(const char* json, size_t len, Config& out, std::string& err) {
     if (!wf.ssid.empty()) c.wifi.push_back(wf);
   }
   c.syncIntervalSec = clampv<int>(doc["sync"]["intervalSec"] | 20, 10, 3600);
+
+  for (JsonObjectConst o : doc["reminders"].as<JsonArrayConst>()) {
+    Reminder r;
+    r.id = str(o["id"]);
+    r.text = str(o["text"]);
+    r.minute = parseHm(o["time"] | (const char*)nullptr);
+    r.confirm = o["confirm"] | true;
+    uint8_t mask = 0;
+    for (JsonVariantConst d : o["days"].as<JsonArrayConst>()) {
+      int v = d | 0;
+      if (v >= 1 && v <= 7) mask |= 1 << (v - 1);
+    }
+    r.days = mask ? mask : 0x7F;  // brak dni = codziennie
+    if (r.id.empty() || r.text.empty() || r.minute < 0) continue;
+    if (c.reminders.size() < 20) c.reminders.push_back(r);
+  }
 
   out = std::move(c);
   return true;

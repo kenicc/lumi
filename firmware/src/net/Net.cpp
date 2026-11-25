@@ -10,6 +10,8 @@
 #include <WiFiClientSecure.h>
 #include <WiFiMulti.h>
 
+#include <deque>
+
 #include "Version.h"
 #include "app/Diag.h"
 #include "app/Events.h"
@@ -34,6 +36,8 @@ volatile bool weatherReq = true;
 volatile bool reportReq = true;
 volatile bool provisionReq = false;
 volatile bool otaForce = false;
+std::deque<std::string> events;  // chroniona przez mtx
+constexpr size_t MAX_EVENTS = 30;
 ota::Offer offer;
 uint32_t lastOtaCheck = 0;
 constexpr uint32_t OTA_CHECK_EVERY_MS = 6UL * 3600 * 1000;
@@ -310,6 +314,25 @@ void report(const Settings& s) {
   if (r.code != 200) diag::error("[serwer] status: %d", r.code);
 }
 
+// ---------- zdarzenia ----------
+
+void flushEvents(const Settings& s) {
+  for (int i = 0; i < 5; i++) {  // kilka na obieg, żeby nie blokować reszty
+    xSemaphoreTake(mtx, portMAX_DELAY);
+    if (events.empty()) {
+      xSemaphoreGive(mtx);
+      return;
+    }
+    String body = events.front().c_str();
+    xSemaphoreGive(mtx);
+    Resp r = request("POST", "/api/device/event", body, s.version);
+    if (r.code != 200 && r.code != 400) return;  // spróbuj później; 400 = zły wpis, odrzuć
+    xSemaphoreTake(mtx, portMAX_DELAY);
+    if (!events.empty()) events.pop_front();
+    xSemaphoreGive(mtx);
+  }
+}
+
 // ---------- aktualizacje ----------
 
 void checkOffer(const Settings& s) {
@@ -486,6 +509,7 @@ void task(void*) {
         report(snapshot());
       }
     }
+    if (helloDone && cloudState == Cloud::Ok) flushEvents(s);
     if (helloDone && cloudState == Cloud::Ok && ota::enabled()) maybeUpdate(s);
     if (s.weather && s.version > 0 && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
       weatherReq = false;
@@ -542,6 +566,13 @@ void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
 void checkUpdateNow() { otaForce = true; }
+
+void queueEvent(const std::string& json) {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  if (events.size() >= MAX_EVENTS) events.pop_front();
+  events.push_back(json);
+  xSemaphoreGive(mtx);
+}
 
 bool saveConfigFile(const char* json, size_t len) {
   File f = LittleFS.open("/config.tmp", "w");

@@ -21,5 +21,6 @@ void showNotice(const char* text);
 // Czytane z zadania sieci, dlatego atomowe.
 bool idleForUpdate();
 bool inCall();
+void testReminder(const char* text);  // konsola: pokaż przypomnienie teraz
 
 }  // namespace app

@@ -8,6 +8,8 @@
 #include <esp_task_wdt.h>
 
 #include <atomic>
+#include <ArduinoJson.h>
+
 #include <deque>
 #include <string>
 
@@ -34,7 +36,7 @@ namespace app {
 
 namespace {
 
-enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired, Service };
+enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired, Service, Reminder };
 enum class Phase : uint8_t { None, Incoming, Outgoing, Active };
 
 constexpr uint32_t POWER_LONG_MS = 3000;
@@ -73,6 +75,23 @@ Missed missed;
 
 std::deque<std::string> notices;
 std::string shownNotice;  // aktualnie widoczny - wraca do kolejki, gdy przerwie go rozmowa
+
+// Przypomnienia od rodziny: kolejka (kilka o tej samej porze, odłożone "na później") i aktywne
+struct Due {
+  std::string id, text;
+  int minute = 0;
+  bool confirm = true;
+  uint8_t snoozes = 0;
+  uint32_t fireAt = 0;  // millis(); 0 = od razu
+};
+constexpr uint32_t SNOOZE_MS = 10UL * 60 * 1000;
+constexpr uint32_t REMINDER_TIMEOUT_MS = 10UL * 60 * 1000;
+constexpr uint8_t MAX_SNOOZES = 2;
+std::deque<Due> remQueue;
+bool remActive = false;
+Due rem;
+uint32_t remShownAt = 0, remBeepAt = 0;
+Screen remPrev = Screen::Home;
 Preferences prefs;
 
 uint32_t lastInput = 0;
@@ -547,6 +566,27 @@ void renderService() {
   ui::setRail(2, IC_BACK, "Wróć", ui::Tone::Neutral);
 }
 
+void renderReminder() {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  lv_obj_t* col = ui::column(ui::content(), 4);
+  char t[16];
+  snprintf(t, sizeof t, "%d:%02d", rem.minute / 60, rem.minute % 60);
+  lv_obj_t* row = lv_obj_create(col);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, 10, 0);
+  ui::label(row, F.icon, P.accent, IC_BELL);
+  ui::label(row, F.body, P.accent, t);
+  ui::label(col, F.title, P.text, rem.text.c_str(), true);
+  ui::setRail(0, IC_CHECK, "Zrobione", ui::Tone::Yes);
+  ui::hideRail(1);
+  if (rem.snoozes < MAX_SNOOZES) ui::setRail(2, IC_CLOSE, "Później", ui::Tone::Neutral);
+  else ui::hideRail(2);
+}
+
 void renderCall() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
@@ -610,6 +650,7 @@ void render() {
       case Screen::Confirm: renderConfirm(); break;
       case Screen::Unpaired: renderUnpaired(); break;
       case Screen::Service: renderService(); break;
+      case Screen::Reminder: renderReminder(); break;
     }
   updateLive();
   firstHighlight();
@@ -668,6 +709,69 @@ void silence() {
   call.silenced = true;
   audio::ring(false, 0);
   render();
+}
+
+// ---------- przypomnienia ----------
+
+void reminderEvent(const Due& d, const char* status) {
+  JsonDocument j;
+  j["type"] = "reminder";
+  j["id"] = d.id;
+  j["text"] = d.text;
+  j["minute"] = d.minute;
+  j["status"] = status;  // done / snoozed / missed
+  j["at"] = (long long)time(nullptr);
+  std::string out;
+  serializeJson(j, out);
+  net::queueEvent(out);
+}
+
+void finishReminder(const char* status) {
+  if (!remActive) return;
+  reminderEvent(rem, status);
+  remActive = false;
+  scr = remPrev;
+  render();
+}
+
+void snoozeReminder() {
+  if (!remActive) return;
+  if (rem.snoozes >= MAX_SNOOZES) return;
+  rem.snoozes++;
+  rem.fireAt = millis() + SNOOZE_MS;
+  reminderEvent(rem, "snoozed");
+  remQueue.push_back(rem);
+  remActive = false;
+  scr = remPrev;
+  render();
+}
+
+void startReadyReminder() {
+  uint32_t now = millis();
+  for (auto it = remQueue.begin(); it != remQueue.end(); ++it) {
+    if (it->fireAt && (int32_t)(now - it->fireAt) < 0) continue;
+    rem = *it;
+    remQueue.erase(it);
+    remActive = true;
+    remPrev = (scr == Screen::Confirm || scr == Screen::Reminder) ? Screen::Home : scr;
+    scr = Screen::Reminder;
+    if (ui::noticeVisible()) {  // przypomnienie ważniejsze niż komunikat o zmianie
+      notices.push_front(shownNotice);
+      ui::dismissNotice();
+    }
+    wake();
+    render();
+    audio::sound(audio::Sound::Notice);
+    remShownAt = remBeepAt = now;
+    return;
+  }
+}
+
+void checkReminders(const tm& l) {
+  if (!haveConfig || !timeValid()) return;
+  int m = l.tm_hour * 60 + l.tm_min;
+  for (const auto& r : C.reminders)
+    if (cfg::reminderDue(r, l.tm_wday, m)) remQueue.push_back({r.id, r.text, r.minute, r.confirm, 0, 0});
 }
 
 // Prawa kolumna: znaczenie zależy od ekranu, ale góra = tak, dół = nie/wstecz tam, gdzie to możliwe
@@ -771,6 +875,15 @@ void rightAction(int slot) {
       }
       break;
     case Screen::Unpaired: break;
+    case Screen::Reminder:
+      if (slot == 0) {
+        audio::sound(audio::Sound::Confirm);
+        finishReminder("done");
+      } else if (slot == 2) {
+        snoozeReminder();
+        ui::toast("Przypomnę za 10 minut");
+      }
+      break;
     case Screen::Service:
       if (slot == 0) {
         net::startProvisioning();
@@ -890,6 +1003,11 @@ void onKey(Key k, Ev type) {
   if (type != Ev::KeyShort) return;
 
   // Dolny rząd: zawsze to samo, na każdym ekranie
+  if (scr == Screen::Reminder && call.phase == Phase::None && remActive) {
+    // wyjście z przypomnienia bez potwierdzenia = przypomnij później (albo brak potwierdzenia)
+    if (rem.snoozes < MAX_SNOOZES) snoozeReminder();
+    else finishReminder("missed");
+  }
   if (call.phase != Phase::None) {
     ui::toast(call.phase == Phase::Incoming ? "Najpierw odbierz albo odrzuć" : "Najpierw rozłącz rozmowę");
     audio::sound(audio::Sound::Error);
@@ -997,7 +1115,8 @@ void onEnded(bool answered, const char* text) {
   audio::ring(false, 0);
   audio::callMode(false);
   call = Call{};
-  scr = haveConfig ? Screen::Home : Screen::Unpaired;
+  // przypomnienie przerwane rozmową wraca na ekran
+  scr = remActive ? Screen::Reminder : (haveConfig ? Screen::Home : Screen::Unpaired);
   wake();
   render();
 }
@@ -1072,7 +1191,12 @@ void checkBattery() {
 void tick() {
   uint32_t now = millis();
   if (now - lastTick < 100) return;
+  uint32_t dt = now - lastTick;
   lastTick = now;
+  if (remActive && call.phase != Phase::None) {  // rozmowa nie zjada czasu na potwierdzenie
+    remShownAt += dt;
+    remBeepAt += dt;
+  }
 
   if (powerHolding && (C.allowPowerOff || !haveConfig) && now - powerHoldAt > 300)
     ui::powerHold(true, now - powerHoldAt, POWER_LONG_MS);
@@ -1092,6 +1216,17 @@ void tick() {
   }
 
   if (scr == Screen::Confirm && call.phase == Phase::None && now - confirmAt > CONFIRM_TIMEOUT_MS) go(Screen::Home);
+
+  // przypomnienia: start, powtarzanie dźwięku co minutę, koniec bez potwierdzenia po 10 min
+  if (!remActive && call.phase == Phase::None && !remQueue.empty()) startReadyReminder();
+  if (remActive && call.phase == Phase::None) {
+    lastInput = now;  // ekran nie gaśnie, dopóki przypomnienie czeka
+    if (now - remBeepAt > 60000) {
+      remBeepAt = now;
+      audio::sound(audio::Sound::Notice);
+    }
+    if (now - remShownAt > REMINDER_TIMEOUT_MS) finishReminder("missed");
+  }
 
   if (screenOn && call.phase == Phase::None && now - lastInput > C.screenOffSec * 1000UL) {
     screenOn = false;
@@ -1123,6 +1258,7 @@ void tick() {
     tm l = now_tm();
     if (l.tm_min != lastMinute) {
       lastMinute = l.tm_min;
+      checkReminders(l);
       if (scr == Screen::Home && call.phase == Phase::None) render();
     }
   }
@@ -1227,6 +1363,11 @@ bool reloadConfig(bool announce) {
 void showNotice(const char* text) { notices.push_back(text); }
 
 bool idleForUpdate() { return idleFlag; }
+
+void testReminder(const char* text) {
+  tm l = now_tm();
+  remQueue.push_back({"test", text, l.tm_hour * 60 + l.tm_min, true, 0, 0});
+}
 bool inCall() { return callFlag; }
 
 }  // namespace app

@@ -42,7 +42,10 @@ wx::Forecast forecast();
 void refreshWeather();
 void reportSoon();  // wyślij stan przy najbliższej okazji (np. po zastosowaniu konfiguracji)
 void startProvisioning();
-void checkUpdateNow();  // konsola: sprawdź i zainstaluj aktualizację od razu (bez czekania na noc)
+void checkUpdateNow();
+
+// Zdarzenie dla rodziny (np. potwierdzenie przypomnienia) - czeka w kolejce, gdy brak internetu
+void queueEvent(const std::string& json);  // konsola: sprawdź i zainstaluj aktualizację od razu (bez czekania na noc)
 
 bool saveConfigFile(const char* json, size_t len);
 

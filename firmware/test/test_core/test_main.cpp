@@ -219,6 +219,23 @@ void test_config_parse() {
   TEST_ASSERT_FALSE(c.lockCall);
 }
 
+void test_reminders() {
+  const char* j = R"({"reminders":[
+    {"id":"leki","text":"Weź leki","time":"08:00","days":[1,2,3,4,5]},
+    {"id":"woda","text":"Napij się wody","time":"14:30","confirm":false},
+    {"id":"zly","text":"x","time":"25:00"}]})";
+  cfg::Config c;
+  std::string err;
+  TEST_ASSERT_TRUE(cfg::parse(j, strlen(j), c, err));
+  TEST_ASSERT_EQUAL(2, (int)c.reminders.size());
+  const cfg::Reminder& leki = c.reminders[0];
+  TEST_ASSERT_TRUE(cfg::reminderDue(leki, 2, 8 * 60));   // wtorek 8:00
+  TEST_ASSERT_FALSE(cfg::reminderDue(leki, 0, 8 * 60));  // niedziela
+  TEST_ASSERT_FALSE(cfg::reminderDue(leki, 2, 8 * 60 + 1));
+  TEST_ASSERT_TRUE(cfg::reminderDue(c.reminders[1], 0, 14 * 60 + 30));  // codziennie
+  TEST_ASSERT_FALSE(c.reminders[1].confirm);
+}
+
 void test_config_broken() {
   cfg::Config c;
   std::string err;
@@ -272,6 +289,7 @@ int main() {
   RUN_TEST(test_weather);
   RUN_TEST(test_config_parse);
   RUN_TEST(test_config_broken);
+  RUN_TEST(test_reminders);
   RUN_TEST(test_contract);
   return UNITY_END();
 }
