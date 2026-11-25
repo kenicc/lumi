@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getProfile, requireMember } from "@/lib/access";
 import { bool, move, newId, num, str } from "@/lib/form";
 import { CONTACT_COLORS, type Media } from "@/lib/schema";
+import { deleteDeviceFiles } from "@/lib/cleanup";
 import { processPhoto } from "@/lib/photo";
 import { saveSettings } from "@/lib/store";
 import { admin } from "@/lib/supabase/admin";
@@ -218,6 +219,7 @@ export async function renameDevice(id: string, fd: FormData) {
 export async function deleteDevice(id: string, fd: FormData) {
   await requireMember(id, "people");
   if (str(fd, "confirm") !== id) redirect(p(id, `/osoby?err=${encodeURIComponent("Wpisz numer urządzenia, żeby potwierdzić")}`));
+  await deleteDeviceFiles(id);
   await admin().from("devices").delete().eq("id", id);
   revalidatePath("/");
   redirect("/");

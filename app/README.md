@@ -27,6 +27,10 @@ Otwórz http://localhost:3000. Jesteś zalogowana jako Ania, opiekunka LUMI "Mam
 - **Przypomnienia**: np. leki o 8:00 w dni robocze. LUMI pokazuje je na cały ekran z dźwiękiem, aż ktoś naciśnie "Zrobione" (można odłożyć 2 razy po 10 minut). Na pulpicie widać, co dziś zostało potwierdzone. Gdy nikt nie potwierdzi, przychodzi powiadomienie.
 - **Powiadomienia push**: słaba bateria (20% i 10%), brak karty SIM, brak zasięgu, LUMI bez połączenia od 2 godzin i ponowne połączenie. Każde przejście progu daje jedno powiadomienie, więc rodzina nie dostaje ich co 5 minut. Na iPhonie działają po dodaniu aplikacji do ekranu początkowego (iOS 16.4+).
 - **Aktualizacje oprogramowania**: `firmware/tools/release.py` dodaje podpisane wydanie, a urządzenia instalują je w nocy (`/api/device/firmware`). Wersję i ostatnie błędy urządzenia opiekun widzi w panelu "Diagnostyka".
+- **Prywatność (RODO)**:
+  - strona `/prywatnosc` mówi, co przechowujemy, a czego nie (lokalizacji, rozmów, historii słuchania);
+  - konto usuwa się samemu w profilu; rola opiekuna przechodzi wtedy na osobę z rodziny, a LUMI bez nikogo jest usuwane razem z plikami;
+  - stare dane kasują się same: przypomnienia po 90 dniach, wiadomości po 180, historia zmian po roku.
 - **Historia zmian**: każde zapisanie składa zdanie, które LUMI pokaże użytkownikowi, np. „Ania dodała kontakt Basia”. Formę czasownika każdy wybiera w profilu.
 
 ## Jak to działa

@@ -63,3 +63,22 @@ test("API urządzenia bez sekretu jest zamknięte", async ({ request }) => {
   const r = await request.get("/api/device/config", { headers: { "X-Lumi-Device": "LUMI-C3D4E5" } });
   expect(r.status()).toBe(401);
 });
+
+test("strona prywatności jest dostępna bez logowania", async ({ page }) => {
+  await page.goto("/prywatnosc");
+  await expect(page.getByRole("heading", { name: "Czego nie zbieramy" })).toBeVisible();
+  await expect(page.getByText("lokalizacji")).toBeVisible();
+});
+
+// na końcu: usuwa konto demo (Ania), rola opiekuna przechodzi na Marka
+test("usunięcie konta wymaga potwierdzenia i przekazuje rolę opiekuna", async ({ page }) => {
+  await page.goto("/profil");
+  await page.getByText("Usuń konto", { exact: true }).click();
+  await page.getByRole("button", { name: "Usuń konto na stałe" }).click();
+  await expect(page.locator(".flash.err")).toContainText("Wpisz USUŃ");
+  await page.getByText("Usuń konto", { exact: true }).click();
+  await page.locator("input[name=confirm]").fill("usuń");
+  await page.getByRole("button", { name: "Usuń konto na stałe" }).click();
+  await expect(page).toHaveURL(/\/login\?deleted=1/);
+  await expect(page.locator(".flash.ok")).toContainText("Konto zostało usunięte");
+});

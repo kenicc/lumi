@@ -131,6 +131,10 @@ export function memoryDb() {
           const b = files.get(key(p));
           return b ? { data: new Blob([new Uint8Array(b)]), error: null } : { data: null, error: { message: "not found" } };
         },
+        async list(prefix: string) {
+          const pre = key(prefix) + "/";
+          return { data: [...files.keys()].filter((k) => k.startsWith(pre)).map((k) => ({ name: k.slice(pre.length) })), error: null };
+        },
         async remove(paths: string[]) {
           paths.forEach((p) => files.delete(key(p)));
           return { data: null, error: null };

@@ -1,4 +1,4 @@
-import { saveProfile } from "../actions";
+import { deleteAccount, saveProfile } from "../actions";
 import { getProfile, requireUser } from "@/lib/access";
 import { Flash, Top } from "@/components/ui";
 import { PushToggle } from "@/components/PushToggle";
@@ -34,6 +34,18 @@ export default async function Profil({ searchParams }: { searchParams: Promise<{
         <p className="dim small">Słaba bateria, brak karty SIM lub zasięgu, LUMI bez połączenia od 2 godzin.</p>
         <PushToggle />
       </section>
+      <details className="card">
+        <summary>Usuń konto</summary>
+        <p className="dim small">
+          Usuniemy Twoje konto i dostęp do wszystkich LUMI. Jeśli jesteś głównym opiekunem, rola przejdzie na osobę z rodziny;
+          gdy nikogo innego nie ma, LUMI i jego dane też zostaną usunięte. <a href="/prywatnosc">Co przechowujemy</a>
+        </p>
+        <form action={deleteAccount}>
+          <label htmlFor="confirm">Wpisz USUŃ, żeby potwierdzić</label>
+          <input id="confirm" name="confirm" type="text" autoComplete="off" />
+          <button className="btn danger block" style={{ marginTop: 12 }}>Usuń konto na stałe</button>
+        </form>
+      </details>
     </main>
   );
 }

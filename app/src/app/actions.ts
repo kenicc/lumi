@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { requireUser, getProfile } from "@/lib/access";
 import { buildDeviceConfig } from "@/lib/config";
 import { safeEqualHex, sha256, ID_RE, isClaimed } from "@/lib/deviceAuth";
+import { planAccountDeletion, type Membership } from "@/lib/account";
+import { deleteDeviceFiles } from "@/lib/cleanup";
+import { DEMO } from "@/lib/demo";
 import { str, newId } from "@/lib/form";
 import { CONTACT_COLORS, defaultSettings } from "@/lib/schema";
 import { pairedText } from "@/lib/summary";
@@ -28,6 +31,28 @@ export async function savePush(endpoint: string, p256dh: string, auth: string) {
 export async function removePush(endpoint: string) {
   const user = await requireUser();
   await admin().from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", user.id);
+}
+
+// RODO: usunięcie konta i danych tej osoby. Rola opiekuna przechodzi na kogoś z rodziny.
+export async function deleteAccount(fd: FormData) {
+  const user = await requireUser("/profil");
+  if (str(fd, "confirm").toUpperCase() !== "USUŃ") redirect(`/profil?err=${encodeURIComponent("Wpisz USUŃ, żeby potwierdzić")}`);
+  const db = admin();
+  const { data: mine } = await db.from("members").select("device_id").eq("user_id", user.id);
+  const ids = (mine ?? []).map((m) => m.device_id);
+  const { data: all } = ids.length ? await db.from("members").select("device_id, user_id, role, created_at").in("device_id", ids) : { data: [] };
+  const plan = planAccountDeletion(user.id, (all ?? []) as Membership[]);
+  for (const p of plan.promote) await db.from("members").update({ role: "guardian" }).eq("device_id", p.device_id).eq("user_id", p.user_id);
+  for (const id of plan.deleteDevices) {
+    await deleteDeviceFiles(id);
+    await db.from("devices").delete().eq("id", id);
+  }
+  // członkostwa, profil i subskrypcje powiadomień znikają kaskadowo razem z kontem
+  if (!DEMO) await db.auth.admin.deleteUser(user.id);
+  else await db.from("members").delete().eq("user_id", user.id);
+  const sb = await supabaseServer();
+  await sb.auth.signOut();
+  redirect("/login?deleted=1");
 }
 
 export async function signOut() {
