@@ -15,5 +15,9 @@ export function sample(): Settings {
   s.weather = { place: "Kraków", lat: 50.06, lon: 19.94 };
   s.access.locked = ["music"];
   s.wifi = [{ ssid: "Dom", pass: "haslo123" }];
+  s.reminders = [
+    { id: "leki", text: "Weź leki", time: "08:00", days: [1, 2, 3, 4, 5], confirm: true },
+    { id: "woda", text: "Napij się wody", time: "14:30", days: [], confirm: false },
+  ];
   return s;
 }

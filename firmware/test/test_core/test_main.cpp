@@ -268,6 +268,12 @@ void test_contract() {
   TEST_ASSERT_TRUE(c.inQuietHours(23 * 60));
   TEST_ASSERT_EQUAL(1, (int)c.wifi.size());
   TEST_ASSERT_EQUAL(20, c.syncIntervalSec);
+  TEST_ASSERT_EQUAL(2, (int)c.reminders.size());
+  TEST_ASSERT_EQUAL(8 * 60, c.reminders[0].minute);
+  TEST_ASSERT_TRUE(cfg::reminderDue(c.reminders[0], 1, 8 * 60));    // poniedziałek
+  TEST_ASSERT_FALSE(cfg::reminderDue(c.reminders[0], 6, 8 * 60));   // sobota
+  TEST_ASSERT_TRUE(cfg::reminderDue(c.reminders[1], 6, 14 * 60 + 30));
+  TEST_ASSERT_FALSE(c.reminders[1].confirm);
 }
 
 int main() {

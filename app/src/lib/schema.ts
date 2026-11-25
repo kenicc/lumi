@@ -25,6 +25,14 @@ export const MediaSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("playlist"), name, from: z.string().max(24).optional(), urls: z.array(httpUrl).min(1).max(100) }),
 ]);
 
+export const ReminderSchema = z.object({
+  id: z.string().min(1).max(40),
+  text: z.string().trim().min(1, "Wpisz treść przypomnienia").max(60),
+  time: hm,
+  days: z.array(z.number().int().min(1).max(7)).max(7), // 1 = poniedziałek; pusta = codziennie
+  confirm: z.boolean(),
+});
+
 export const SlotSchema = z.string().regex(/^(|media|weather|contact:.{1,40})$/);
 
 export const SettingsSchema = z.object({
@@ -57,11 +65,14 @@ export const SettingsSchema = z.object({
   }),
   wifi: z.array(z.object({ ssid: z.string().trim().min(1).max(32), pass: z.string().max(64) })).max(5),
   sync: z.object({ intervalSec: z.number().int().min(10).max(3600) }),
+  // pola dodane później mają wartość domyślną - stare zapisy w bazie nadal przechodzą walidację
+  reminders: z.array(ReminderSchema).max(20).default([]),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
 export type Contact = z.infer<typeof ContactSchema>;
 export type Media = z.infer<typeof MediaSchema>;
+export type Reminder = z.infer<typeof ReminderSchema>;
 
 export function defaultSettings(): Settings {
   return {
@@ -76,6 +87,7 @@ export function defaultSettings(): Settings {
     access: { autoAnswerSec: 5, oneButton: false, minPressMs: 0, repeatIgnoreMs: 250, locked: [], allowPowerOff: true },
     wifi: [],
     sync: { intervalSec: 20 },
+    reminders: [],
   };
 }
 

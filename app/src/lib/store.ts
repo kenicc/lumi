@@ -8,9 +8,17 @@ import { summarize, type Form } from "./summary";
 import { admin } from "./supabase/admin";
 import type { Role } from "./types";
 
+/**
+ * Ustawienia z bazy. Brakujące sekcje (np. dodane w nowszej wersji aplikacji) dostają wartości
+ * domyślne. Uszkodzonych danych NIE zastępujemy domyślnymi po cichu - następny zapis
+ * skasowałby rodzinie kontakty. Zamiast tego błąd, który widać i da się naprawić.
+ */
 export function currentSettings(raw: unknown): Settings {
-  const r = SettingsSchema.safeParse(raw);
-  return r.success ? r.data : defaultSettings();
+  if (raw == null) return defaultSettings();
+  const merged = { ...defaultSettings(), ...(raw as object) };
+  const r = SettingsSchema.safeParse(merged);
+  if (!r.success) throw new Error(`Ustawienia urządzenia w bazie są nieprawidłowe: ${r.error.issues[0]?.path.join(".")}`);
+  return r.data;
 }
 
 /**

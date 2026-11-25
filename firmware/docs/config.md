@@ -29,4 +29,5 @@ Przykład: [`data/config.json`](../data/config.json). Brakujące pola dostają w
 | `access.locked[]` | [] | `"music"`, `"call"` - wyłączone przyciski |
 | `access.allowPowerOff` | true | false = włącznik nie wyłącza (osoba, która przypadkiem wyłącza telefon) |
 | `wifi[]` | - | `ssid`, `pass` |
+| `reminders[]` | [] | do 20 przypomnień: `id`, `text` (do 60 znaków), `time` "08:00", `days` [1-7, 1 = pn; pusta = codziennie], `confirm` (czekaj na "Zrobione"; bez potwierdzenia w 10 min rodzina dostaje powiadomienie) |
 | `sync.intervalSec` | 20 | jak często LUMI pyta serwer aplikacji o zmiany (10-3600 s) |

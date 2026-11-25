@@ -28,6 +28,12 @@ function seed(): Db {
     { type: "playlist", name: "Piosenki od Ani", from: "Ania", urls: ["https://example.com/a.mp3"] },
   ];
   s.weather = { place: "Kraków", lat: 50.06, lon: 19.94 };
+  s.reminders = [
+    { id: "r1", text: "Leki na ciśnienie", time: "08:00", days: [], confirm: true },
+    { id: "r2", text: "Obiad", time: "13:00", days: [], confirm: false },
+    { id: "r3", text: "Wizyta u lekarza o 11", time: "09:30", days: [3], confirm: true },
+    { id: "r4", text: "Leki wieczorne", time: "20:00", days: [], confirm: true },
+  ];
   const now = Date.now();
   db.tables.devices.push({
     id: "LUMI-C3D4E5", secret_hash: "0".repeat(64), pair_hash: null, name: "Mama", settings: s,
@@ -45,6 +51,13 @@ function seed(): Db {
   ch(5, "Marek", "dodał stację Radio Kraków", 60 * 26);
   ch(6, "Ania", "zmieniła głośność", 60 * 3);
   ch(7, "Ania", "dodała kontakt Przychodnia", 12);
+  const today = (h: number, m: number) => {
+    const d = new Date(now);
+    d.setUTCHours(h - 1, m, 0, 0); // ok. czas polski zimą
+    return d.toISOString();
+  };
+  db.tables.reminder_events.push({ device_id: "LUMI-C3D4E5", reminder_id: "r1", text: "Leki na ciśnienie", minute: 480, status: "done", at: today(8, 4) });
+  db.tables.reminder_events.push({ device_id: "LUMI-C3D4E5", reminder_id: "r2", text: "Obiad", minute: 780, status: "shown", at: today(13, 10) });
   return db;
 }
 

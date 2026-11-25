@@ -80,6 +80,19 @@ create table if not exists push_subscriptions (
 create index if not exists push_user on push_subscriptions (user_id);
 alter table push_subscriptions enable row level security;
 
+-- Przypomnienia: co LUMI zgłosiło (potwierdzone, odłożone, bez potwierdzenia)
+create table if not exists reminder_events (
+  id bigserial primary key,
+  device_id text not null references devices on delete cascade,
+  reminder_id text not null,
+  text text not null,
+  minute int not null,
+  status text not null check (status in ('done', 'snoozed', 'missed', 'shown')),
+  at timestamptz not null default now()
+);
+create index if not exists reminder_events_device on reminder_events (device_id, at desc);
+alter table reminder_events enable row level security;
+
 -- Wydania oprogramowania (dodaje je firmware/tools/release.py kluczem serwisowym)
 create table if not exists firmware_releases (
   id bigserial primary key,

@@ -40,6 +40,15 @@ export function summarize(prev: Settings, next: Settings, form: Form): string {
   if (mRemoved.length) parts.push(`${v("remove")} ${mediaWord(mRemoved[0])} ${list(mRemoved.map((m) => m.name))}`);
   if (!mAdded.length && !mRemoved.length && !same(prev.media, next.media)) parts.push(`${v("change")} listę radia`);
 
+  const rKey = (r: { id: string }) => r.id;
+  const prevR = new Set(prev.reminders.map(rKey));
+  const nextR = new Set(next.reminders.map(rKey));
+  const rAdded = next.reminders.filter((r) => !prevR.has(r.id));
+  const rRemoved = prev.reminders.filter((r) => !nextR.has(r.id));
+  if (rAdded.length) parts.push(`${v("add")} przypomnienie ${list(rAdded.map((r) => r.text))}`);
+  if (rRemoved.length) parts.push(`${v("remove")} przypomnienie ${list(rRemoved.map((r) => r.text))}`);
+  if (!rAdded.length && !rRemoved.length && !same(prev.reminders, next.reminders)) parts.push(`${v("change")} przypomnienia`);
+
   if (!same(prev.home, next.home)) parts.push(`${v("change")} przyciski na ekranie głównym`);
   if (!same(prev.display, next.display)) parts.push(`${v("change")} wygląd ekranu`);
   if (!same(prev.sound, next.sound)) parts.push(`${v("change")} głośność`);

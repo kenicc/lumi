@@ -719,7 +719,7 @@ void reminderEvent(const Due& d, const char* status) {
   j["id"] = d.id;
   j["text"] = d.text;
   j["minute"] = d.minute;
-  j["status"] = status;  // done / snoozed / missed
+  j["status"] = status;  // done / snoozed / missed / shown
   j["at"] = (long long)time(nullptr);
   std::string out;
   serializeJson(j, out);
@@ -1005,7 +1005,8 @@ void onKey(Key k, Ev type) {
   // Dolny rząd: zawsze to samo, na każdym ekranie
   if (scr == Screen::Reminder && call.phase == Phase::None && remActive) {
     // wyjście z przypomnienia bez potwierdzenia = przypomnij później (albo brak potwierdzenia)
-    if (rem.snoozes < MAX_SNOOZES) snoozeReminder();
+    if (!rem.confirm) finishReminder("shown");
+    else if (rem.snoozes < MAX_SNOOZES) snoozeReminder();
     else finishReminder("missed");
   }
   if (call.phase != Phase::None) {
@@ -1225,7 +1226,8 @@ void tick() {
       remBeepAt = now;
       audio::sound(audio::Sound::Notice);
     }
-    if (now - remShownAt > REMINDER_TIMEOUT_MS) finishReminder("missed");
+    // bez potwierdzania: po prostu "przypomniane"; z potwierdzaniem: rodzina dostanie powiadomienie
+    if (now - remShownAt > REMINDER_TIMEOUT_MS) finishReminder(rem.confirm ? "missed" : "shown");
   }
 
   if (screenOn && call.phase == Phase::None && now - lastInput > C.screenOffSec * 1000UL) {

@@ -20,6 +20,7 @@ Zrzuty pochodzą z symulatora (`sim/`), który kompiluje ten sam kod ekranów co
 - **Orientacja w czasie:** "Wtorek wieczorem" i pełna data zamiast samych cyfr (ważne przy zaburzeniach pamięci).
 - **Jedna rada pogodowa** zamiast tabeli: "Weź parasol", "Uwaga, ślisko".
 - **Nic się nie dzieje przypadkiem:** pierwsze naciśnięcie przy wygaszonym ekranie tylko go budzi; szybkie wybieranie z ekranu głównego pyta "Zadzwonić do Ani?"; wyłączenie wymaga przytrzymania 3 s z widocznym postępem.
+- **Przypomnienia od rodziny** (leki, posiłki, wizyty) na cały ekran z dźwiękiem co minutę, przyciski "Zrobione" i "Później". Rozmowa ma pierwszeństwo, a przypomnienie wraca po niej.
 - **Nieodebrane połączenie** zostaje na ekranie głównym z przyciskiem "Oddzwoń" (także po restarcie).
 - **Dzwonek narasta** od cichszego do ustawionej głośności; tony w paśmie 400-1000 Hz, które z wiekiem słabną najpóźniej.
 - **Ekran pokazuje tylko problemy** (słaba bateria, brak zasięgu, brak SIM). Gdy wszystko działa, jest czysto.

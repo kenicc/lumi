@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { can, requireMember, type Section } from "@/lib/access";
 import { admin } from "@/lib/supabase/admin";
+import { todayPlan, type DayState, type ReminderEvent } from "@/lib/reminders";
 import { batteryText, isOnline, signalText } from "@/lib/status";
+import { currentSettings } from "@/lib/store";
 import { ROLE_NAMES } from "@/lib/types";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { Flash, Top, ago, type SP } from "@/components/ui";
@@ -9,6 +11,7 @@ import { Flash, Top, ago, type SP } from "@/components/ui";
 const SECTIONS: { href: string; ico: string; title: string; desc: string; section: Section }[] = [
   { href: "kontakty", ico: "📞", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
   { href: "ekran", ico: "🏠", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
+  { href: "przypomnienia", ico: "⏰", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
   { href: "radio", ico: "📻", title: "Radio i muzyka", desc: "stacje FM, internetowe, piosenki", section: "media" },
   { href: "wyglad", ico: "🔆", title: "Wygląd i dźwięk", desc: "wielkość tekstu, głośność, cisza nocna", section: "look" },
   { href: "pogoda", ico: "⛅", title: "Pogoda", desc: "miejscowość", section: "weather" },
@@ -16,6 +19,18 @@ const SECTIONS: { href: string; ico: string; title: string; desc: string; sectio
   { href: "wifi", ico: "📶", title: "Wi-Fi", desc: "sieci, z którymi łączy się LUMI", section: "wifi" },
   { href: "osoby", ico: "👥", title: "Osoby", desc: "kto ma dostęp do ustawień", section: "people" },
 ];
+
+const STATE: Record<DayState, { text: string; cls: string }> = {
+  done: { text: "zrobione", cls: "badge ok" },
+  missed: { text: "bez potwierdzenia", cls: "badge bad" },
+  snoozed: { text: "odłożone", cls: "badge" },
+  shown: { text: "przypomniane", cls: "badge ok" },
+  waiting: { text: "LUMI przypomina", cls: "badge" },
+  upcoming: { text: "później", cls: "dim small" },
+  unknown: { text: "brak informacji", cls: "badge bad" },
+};
+const hm = (iso?: string) =>
+  iso ? new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw" }) : "";
 
 export default async function Device({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SP }) {
   const { id } = await params;
@@ -28,6 +43,12 @@ export default async function Device({ params, searchParams }: { params: Promise
     .order("created_at", { ascending: false })
     .limit(5);
   const changes = (ch ?? []) as { author: string; summary: string; version: number; created_at: string }[];
+  const { data: evs } = await admin()
+    .from("reminder_events")
+    .select("reminder_id, status, at")
+    .eq("device_id", id)
+    .gt("at", new Date(Date.now() - 36 * 3600 * 1000).toISOString());
+  const plan = todayPlan(currentSettings(d.settings).reminders, (evs ?? []) as ReminderEvent[]);
   const online = isOnline(d);
   const pending = d.applied_version < d.config_version;
 
@@ -54,6 +75,24 @@ export default async function Device({ params, searchParams }: { params: Promise
         )}
         {(d.status?.battery ?? 100) <= 20 && !d.status?.charging && <p className="flash err">Słaba bateria - przypomnij o ładowaniu.</p>}
       </section>
+
+      {plan.length > 0 && (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Dziś</h2>
+          <ul className="list">
+            {plan.map((p) => (
+              <li key={p.reminder.id} className="row" style={{ padding: "8px 0" }}>
+                <b style={{ minWidth: 56 }}>{p.reminder.time}</b>
+                <span className="grow">{p.reminder.text}</span>
+                <span className={STATE[p.state].cls}>
+                  {STATE[p.state].text}
+                  {p.state === "done" && p.at ? ` ${hm(p.at)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <ul className="list nav card">
         {SECTIONS.filter((s) => can(role, s.section)).map((s) => (

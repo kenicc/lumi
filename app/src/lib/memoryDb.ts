@@ -3,7 +3,7 @@
 type Row = Record<string, unknown>;
 
 export function memoryDb() {
-  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [] };
+  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [], reminder_events: [] };
 
   function query(table: string) {
     const filters: ((r: Row) => boolean)[] = [];

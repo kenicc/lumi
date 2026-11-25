@@ -105,6 +105,24 @@ export async function musicUploadUrl(id: string, fileName: string) {
   return { path, token: data.token, url: pub.publicUrl };
 }
 
+// ---------- przypomnienia ----------
+
+export async function addReminder(id: string, fd: FormData) {
+  return saveSettings(id, "reminders", (s) => {
+    if (s.reminders.length >= 20) return "Najwięcej 20 przypomnień";
+    const days = [1, 2, 3, 4, 5, 6, 7].filter((d) => bool(fd, `d${d}`));
+    if (!days.length) return "Zaznacz co najmniej jeden dzień";
+    s.reminders.push({ id: newId(), text: str(fd, "text"), time: str(fd, "time"), days: days.length === 7 ? [] : days, confirm: bool(fd, "confirm") });
+    s.reminders.sort((a, b) => a.time.localeCompare(b.time));
+  }, p(id, "/przypomnienia"));
+}
+
+export async function deleteReminder(id: string, rid: string) {
+  return saveSettings(id, "reminders", (s) => {
+    s.reminders = s.reminders.filter((r) => r.id !== rid);
+  }, p(id, "/przypomnienia"));
+}
+
 // ---------- wygląd i dźwięk ----------
 
 export async function saveLook(id: string, fd: FormData) {

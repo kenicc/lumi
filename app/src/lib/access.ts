@@ -10,6 +10,7 @@ export const CAN = {
   contacts: ["guardian", "family"],
   home: ["guardian", "family"],
   media: ["guardian", "family", "friend"],
+  reminders: ["guardian", "family"],
   look: ["guardian", "family"],
   weather: ["guardian", "family"],
   wifi: ["guardian", "family"],
