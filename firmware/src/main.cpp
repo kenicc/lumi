@@ -53,12 +53,24 @@ void setup() {
   Serial.printf("LUMI %s gotowe. Wpisz help.\n", LUMI_VARIANT);
 }
 
+// Oszczędzanie energii: gdy LUMI nic nie robi (ekran zgaszony, bez rozmowy i muzyki), procesor
+// zwalnia do 80 MHz, a ekran nie jest odświeżany. Przyciski, rolka i modem działają normalnie -
+// pierwsze naciśnięcie budzi urządzenie w ułamku sekundy.
+static bool lowPower = false;
+
 void loop() {
   input::poll();
   battery::poll();
   console::poll();
   app::loop();
-  display::tick();
+
+  bool idle = app::canSlowDown();
+  if (idle != lowPower) {
+    lowPower = idle;
+    if (lowPower) display::tick();  // dokończ ostatnią klatkę, zanim przestaniemy odświeżać
+    setCpuFrequencyMhz(lowPower ? 80 : 240);
+  }
+  if (!lowPower) display::tick();
   esp_task_wdt_reset();
-  delay(5);
+  delay(lowPower ? 20 : 5);
 }

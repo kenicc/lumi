@@ -71,7 +71,7 @@ export default async function Device({ params, searchParams }: { params: Promise
         </div>
         {pending && (
           <p className="small dim">
-            Ostatnia zmiana czeka na LUMI. {online ? "Powinna dotrzeć w kilkanaście sekund." : "Dotrze, gdy LUMI połączy się z siecią."}
+            Ostatnia zmiana czeka na LUMI. {online ? "Powinna dotrzeć w ciągu minuty." : "Dotrze, gdy LUMI połączy się z siecią."}
           </p>
         )}
         {(d.status?.battery ?? 100) <= 20 && !d.status?.charging && <p className="flash err">Słaba bateria - przypomnij o ładowaniu.</p>}

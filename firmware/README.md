@@ -66,6 +66,15 @@ Interfejs da się testować bez przylutowanych przycisków: `key call`, `key mid
 
 Przytrzymanie Home przez 5 s otwiera ekran serwisowy dla rodziny: informacje o połączeniu, kod parowania (gdy LUMI zostało usunięte z aplikacji) i przycisk "Wi-Fi" uruchamiający sieć LUMI do podania nowej sieci (np. po przeprowadzce).
 
+## Oszczędzanie energii
+
+Gdy LUMI nic nie robi (zgaszony ekran, bez rozmowy i bez radia internetowego):
+- procesor zwalnia z 240 do 80 MHz, a ekran nie jest odświeżany;
+- pętla logiki działa co 20 ms zamiast 5 ms;
+- na baterii serwer jest odpytywany najwyżej co minutę zamiast co 20 s, bo każde połączenie TLS kosztuje prąd.
+
+Pierwsze naciśnięcie przycisku albo dzwonek od razu przywraca pełną szybkość. Radio FM gra dalej także w trybie oszczędnym. Pobór trzeba zmierzyć na stole (etap 2) - dopiero wtedy wiadomo, czy wystarczy, czy potrzebny jest sen modemu (DTR) i uśpienie ESP32 z budzeniem przez RI.
+
 ## Aktualizacje przez Wi-Fi (OTA)
 
 Nowe wersje trafiają do urządzeń same, bez kabla. Instalują się w nocy (2:00-5:00), gdy LUMI nic nie robi i ma co najmniej 50% baterii albo ładowarkę.

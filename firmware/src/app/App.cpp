@@ -83,6 +83,7 @@ uint8_t batteryWarned = 100;
 uint8_t ringOverride = 0;  // prototyp bez radia: rolka poza rozmową zmienia głośność dzwonka (0 = jak w aplikacji)
 lv_obj_t* live = nullptr;
 std::atomic<bool> idleFlag{false};
+std::atomic<bool> slowFlag{false};
 std::atomic<bool> callFlag{false};
 bool healthyMarked = false;  // etykieta odświeżana co sekundę (czas rozmowy, odliczanie)
 
@@ -710,6 +711,8 @@ void tick() {
   lastTick = now;
   if (selftest::active()) {  // test sprzętu: bez wygaszania ekranu i bez zwykłych ekranów
     lastInput = now;
+    idleFlag = slowFlag = false;
+    wake();
     selftest::tick();
     if (!selftest::active()) render();
     return;
@@ -766,7 +769,10 @@ void tick() {
     audio::sound(audio::Sound::Notice);
   }
 
-  idleFlag = !screenOn && call.phase == Phase::None && !audio::state().playing;
+  audio::State as = audio::state();
+  idleFlag = !screenOn && call.phase == Phase::None && !as.playing;
+  // procesor może zwolnić także przy radiu FM (analogowe); radio internetowe wymaga dekodowania
+  slowFlag = !screenOn && call.phase == Phase::None && !(as.playing && as.src == audio::Src::Stream);
   callFlag = call.phase != Phase::None;
   if (!healthyMarked && now > 180000) {  // 3 minuty pracy: nowa wersja oprogramowania jest zdrowa
     healthyMarked = true;
@@ -905,6 +911,7 @@ bool reloadConfig(bool announce) {
 void showNotice(const char* text) { notices.push_back(text); }
 
 bool idleForUpdate() { return idleFlag; }
+bool canSlowDown() { return slowFlag; }
 
 void testMessage(const char* author, const char* text) {
   static int id = 900000;

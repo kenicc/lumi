@@ -14,7 +14,8 @@ export function Flash({ ok, err }: { ok?: string; err?: string }) {
   if (ok === "1")
     return (
       <div className="flash ok" role="status">
-        Zapisano. LUMI pobierze zmianę w ciągu kilkunastu sekund i pokaże, kto ją wprowadził.
+        Zapisano. LUMI pobierze zmianę zwykle w kilkanaście sekund (gdy śpi na baterii - do minuty) i pokaże, kto ją
+        wprowadził.
       </div>
     );
   if (ok === "0") return <div className="flash ok" role="status">Bez zmian.</div>;

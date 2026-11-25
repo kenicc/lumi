@@ -576,7 +576,10 @@ void task(void*) {
         lastSync = now;
         hello(s);
       }
-      uint32_t every = (cloudState == Cloud::Unclaimed ? 5 : s.syncIntervalSec) * 1000UL;  // parowanie: szybciej
+      // parowanie: co 5 s; LUMI śpi na baterii: najwyżej co minutę (każde połączenie TLS kosztuje prąd)
+      uint32_t sec = s.syncIntervalSec;
+      if (app::idleForUpdate() && !battery::charging() && sec < 60) sec = 60;
+      uint32_t every = (cloudState == Cloud::Unclaimed ? 5 : sec) * 1000UL;
       if (helloDone && (!lastSync || now - lastSync > every)) {
         lastSync = now;
         syncConfig(s);

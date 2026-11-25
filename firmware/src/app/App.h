@@ -21,6 +21,7 @@ void showNotice(const char* text);
 // Czytane z zadania sieci, dlatego atomowe.
 bool idleForUpdate();
 bool inCall();
+bool canSlowDown();  // można zwolnić procesor (oszczędzanie energii)
 void testReminder(const char* text);  // konsola: pokaż przypomnienie teraz
 void startSelfTest();
 void testMessage(const char* author, const char* text);

@@ -23,7 +23,7 @@ export default async function Messages({ params, searchParams }: { params: Promi
       <Top back={{ href: `/d/${id}`, label: device.name ?? id }} />
       <h1>Wiadomości</h1>
       <p className="dim">Krótki tekst pojawi się na LUMI na cały ekran. Gdy ktoś naciśnie „Dobrze”, zobaczysz tu godzinę przeczytania. Jeśli jesteś w kontaktach, LUMI pozwoli od razu do Ciebie oddzwonić.</p>
-      {ok === "1" && <div className="flash ok" role="status">Wysłano. LUMI pokaże wiadomość w ciągu kilkunastu sekund.</div>}
+      {ok === "1" && <div className="flash ok" role="status">Wysłano. LUMI pokaże wiadomość zwykle w kilkanaście sekund, najpóźniej w ciągu minuty.</div>}
       {err && <div className="flash err" role="alert">{err}</div>}
       <form action={sendMessage.bind(null, id)} className="card">
         <label htmlFor="text">Wiadomość</label>
