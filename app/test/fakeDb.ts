@@ -2,7 +2,7 @@
 type Row = Record<string, unknown>;
 
 export function fakeDb() {
-  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [] };
+  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [] };
 
   function query(table: string) {
     const filters: ((r: Row) => boolean)[] = [];
@@ -21,8 +21,12 @@ export function fakeDb() {
         filters.push((r) => r[k] === v);
         return q;
       },
-      gt(k: string, v: number) {
-        filters.push((r) => (r[k] as number) > v);
+      gt(k: string, v: number | string) {
+        filters.push((r) => r[k] != null && (r[k] as number | string) > v);
+        return q;
+      },
+      lt(k: string, v: number | string) {
+        filters.push((r) => r[k] != null && (r[k] as number | string) < v);
         return q;
       },
       order(k: string, opts?: { ascending?: boolean }) {
@@ -76,7 +80,8 @@ export function fakeDb() {
         const { k, asc } = sortBy;
         matched.sort((a, b) => ((a[k] as number) - (b[k] as number)) * (asc ? 1 : -1));
       }
-      return head ? [] : matched.slice(0, lim);
+      // jak prawdziwa baza: kopie, nie żywe wiersze
+      return head ? [] : matched.slice(0, lim).map((r) => structuredClone(r));
     }
     // count dla select(..., {count, head}) - zwracamy liczbę dopasowanych
     const origThen = q.then;

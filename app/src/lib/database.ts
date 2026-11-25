@@ -41,6 +41,10 @@ export interface Database {
         { id: number; device_id: string; user_id: string | null; author: string; summary: string; version: number; created_at: string },
         "device_id" | "author" | "summary" | "version"
       >;
+      push_subscriptions: Table<
+        { endpoint: string; user_id: string; p256dh: string; auth: string; created_at: string },
+        "endpoint" | "user_id" | "p256dh" | "auth"
+      >;
       firmware_releases: Table<
         {
           id: number;

@@ -1,7 +1,9 @@
 // Stan urządzenia widoczny dla rodziny. Bez lokalizacji i bez historii słuchania (dokumentacja v2.0).
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { backOnlineAlert, statusAlerts } from "@/lib/alerts";
 import { authDevice } from "@/lib/deviceAuth";
+import { notifyDevice } from "@/lib/push";
 import { admin } from "@/lib/supabase/admin";
 
 const Body = z.object({
@@ -31,6 +33,10 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
   const s = parsed.data;
+  // alarmy liczymy względem poprzedniego stanu, zanim zostanie nadpisany
+  const name = d.name ?? "LUMI";
+  const alerts = statusAlerts(d.status, s, name);
+  if (d.offline_alerted) alerts.push(backOnlineAlert(name));
   await admin()
     .from("devices")
     .update({
@@ -40,7 +46,9 @@ export async function POST(req: Request) {
       fw_build: s.build ?? d.fw_build,
       variant: s.variant ?? d.variant,
       last_seen: new Date().toISOString(),
+      offline_alerted: false,
     })
     .eq("id", d.id);
+  for (const a of alerts) await notifyDevice(d.id, a);
   return NextResponse.json({ ok: true });
 }

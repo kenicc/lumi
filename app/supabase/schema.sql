@@ -69,6 +69,17 @@ alter table changes enable row level security;
 alter table devices add column if not exists fw_build int not null default 0;
 alter table devices add column if not exists offline_alerted boolean not null default false;
 
+-- Powiadomienia push (Web Push) - jedna subskrypcja na przeglądarkę/telefon
+create table if not exists push_subscriptions (
+  endpoint text primary key,
+  user_id uuid not null references auth.users on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_user on push_subscriptions (user_id);
+alter table push_subscriptions enable row level security;
+
 -- Wydania oprogramowania (dodaje je firmware/tools/release.py kluczem serwisowym)
 create table if not exists firmware_releases (
   id bigserial primary key,

@@ -9,6 +9,8 @@ Aplikacja webowa instalowana na telefonie jak zwykła aplikacja (PWA): jedna dla
 - **Ustawienia**: kontakty z kolejnością i auto-odbieraniem, trzy przyciski ekranu głównego (z podglądem), radio FM i internetowe, wgrywanie MP3 z telefonu, wielkość tekstu, kontrast, głośność, godziny ciszy, dostępność (drżenie dłoni, tryb jednego przycisku, blokady, odbieranie tylko od kontaktów), pogoda z wyszukiwarką miejscowości, sieci Wi-Fi.
 - **Role**: główny opiekun ma dostęp do wszystkiego; rodzina - do kontaktów, ekranu, radia, wyglądu, pogody i Wi-Fi; znajomi - tylko do radia i muzyki. Zaprasza się e-mailem.
 - **Stan urządzenia**: bateria, zasięg, ostatni kontakt, czy ostatnia zmiana już dotarła. Bez lokalizacji i historii słuchania.
+- **Powiadomienia push**: słaba bateria (20% i 10%), brak karty SIM, brak zasięgu, LUMI bez połączenia od 2 godzin i ponowne połączenie. Każde przejście progu daje jedno powiadomienie, więc rodzina nie dostaje ich co 5 minut. Na iPhonie działają po dodaniu aplikacji do ekranu początkowego (iOS 16.4+).
+- **Aktualizacje oprogramowania**: `firmware/tools/release.py` dodaje podpisane wydanie, a urządzenia instalują je w nocy (`/api/device/firmware`). Wersję i ostatnie błędy urządzenia opiekun widzi w panelu "Diagnostyka".
 - **Historia zmian**: każde zapisanie składa zdanie, które LUMI pokaże użytkownikowi, np. „Ania dodała kontakt Basia”. Formę czasownika każdy wybiera w profilu.
 
 ## Jak to działa
@@ -30,12 +32,20 @@ LUMI --co 5 min i po zmianie-------------> /api/device/status
 3. **Zmienne**: skopiuj `.env.example` do `.env.local` i uzupełnij wartości z Project Settings -> API.
 4. **Lokalnie**: `npm install && npm run dev`.
 5. **Wdrożenie**: Vercel -> import repozytorium, katalog `app`, te same zmienne środowiskowe.
+   - **Powiadomienia**: `npx web-push generate-vapid-keys`, wynik wpisz do `NEXT_PUBLIC_VAPID_PUBLIC_KEY` i `VAPID_PRIVATE_KEY`, ustaw też `CRON_SECRET`.
+   - **Uwaga - harmonogram**: `vercel.json` sprawdza co godzinę, czy któreś LUMI nie straciło połączenia. Darmowy plan Vercel (Hobby) uruchamia harmonogram najwyżej raz dziennie. Wtedy zamiast niego użyj Supabase (Database -> Extensions: `pg_cron` i `pg_net`):
+
+     ```sql
+     select cron.schedule('lumi-offline', '*/30 * * * *', $$
+       select net.http_get('https://TWOJ-ADRES/api/cron/offline',
+         headers := '{"Authorization": "Bearer TWOJ_CRON_SECRET"}'::jsonb) $$);
+     ```
 6. **Urządzenie**: wpisz adres aplikacji w `firmware/platformio.ini` (`-DLUMI_SERVER=\"https://...\"`). Można go też podać na stronie 192.168.4.1 przy konfiguracji Wi-Fi albo w konsoli: `server https://...`.
 
 Na telefonie: otwórz adres aplikacji, potem "Dodaj do ekranu początkowego" (iPhone: Udostępnij -> Do ekranu początkowego).
 
 ```bash
-npm test          # schemat, kontrakt z firmware, zdania o zmianach, protokół urządzenia
+npm test          # schemat, kontrakt z firmware, zdania o zmianach, protokół urządzenia, aktualizacje, powiadomienia
 npm run build
 ```
 

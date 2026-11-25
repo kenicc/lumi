@@ -19,6 +19,17 @@ export async function saveProfile(fd: FormData) {
   redirect(next.startsWith("/") ? next : "/");
 }
 
+export async function savePush(endpoint: string, p256dh: string, auth: string) {
+  const user = await requireUser();
+  if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000) throw new Error("zły adres");
+  await admin().from("push_subscriptions").upsert({ endpoint, user_id: user.id, p256dh, auth });
+}
+
+export async function removePush(endpoint: string) {
+  const user = await requireUser();
+  await admin().from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", user.id);
+}
+
 export async function signOut() {
   const sb = await supabaseServer();
   await sb.auth.signOut();

@@ -35,6 +35,7 @@ export interface DeviceRow {
   variant: string | null;
   fw: string | null;
   fw_build: number;
+  offline_alerted: boolean;
   last_seen: string | null;
 }
 

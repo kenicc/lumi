@@ -6,6 +6,7 @@ import { admin } from "@/lib/supabase/admin";
 import { batteryText, isOnline } from "@/lib/status";
 import { ROLE_NAMES, type DeviceRow, type Role } from "@/lib/types";
 import { ago } from "@/components/ui";
+import { PushToggle } from "@/components/PushToggle";
 
 export default async function Home() {
   const user = await requireUser("/");
@@ -53,6 +54,7 @@ export default async function Home() {
           </Link>
         );
       })}
+      {devices.length > 0 && <PushToggle compact />}
       <form action={signOut} style={{ marginTop: 32 }}>
         <button className="btn block">Wyloguj</button>
       </form>

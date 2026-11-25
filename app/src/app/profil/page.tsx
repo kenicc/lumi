@@ -1,6 +1,7 @@
 import { saveProfile } from "../actions";
 import { getProfile, requireUser } from "@/lib/access";
 import { Flash, Top } from "@/components/ui";
+import { PushToggle } from "@/components/PushToggle";
 
 export default async function Profil({ searchParams }: { searchParams: Promise<{ next?: string; err?: string }> }) {
   const { next = "/", err } = await searchParams;
@@ -28,6 +29,11 @@ export default async function Profil({ searchParams }: { searchParams: Promise<{
         ))}
         <button className="btn primary block">Zapisz</button>
       </form>
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Powiadomienia</h2>
+        <p className="dim small">Słaba bateria, brak karty SIM lub zasięgu, LUMI bez połączenia od 2 godzin.</p>
+        <PushToggle />
+      </section>
     </main>
   );
 }
