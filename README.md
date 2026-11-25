@@ -30,4 +30,4 @@ CI (`.github/workflows/ci.yml`) przy każdej zmianie:
 - robi zrzuty ekranów LUMI w symulatorze (artefakt `ekrany-lumi`);
 - sprawdza typy, testy i build aplikacji.
 
-Na sprzęcie dotąd nic nie było uruchomione: kolejny krok to złożenie prototypu z koszyka i test rozmów.
+Na sprzęcie dotąd nic nie było uruchomione: kolejny krok to złożenie prototypu z koszyka i test rozmów - instrukcja krok po kroku, także bez lutowania: [`firmware/docs/skladanie.md`](firmware/docs/skladanie.md).

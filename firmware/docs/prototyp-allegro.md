@@ -1,5 +1,7 @@
 # Prototyp z koszyka Allegro
 
+> Instrukcja składania krok po kroku, także bez lutowania: [skladanie.md](skladanie.md)
+
 Środowisko `allegro` w `platformio.ini`. Wgrywanie: `pio run -e allegro -t upload` i `pio run -e allegro -t uploadfs`.
 
 ## Czego brakuje w koszyku
