@@ -54,4 +54,11 @@ export function ago(iso: string | null): string {
   return `${Math.round(h / 24)} dni temu`;
 }
 
+// Polska odmiana: 1 nowa propozycja, 2-4 nowe propozycje, 5+ nowych propozycji (ale 22 nowe)
+export function plural(n: number, one: string, few: string, many: string) {
+  if (n === 1) return one;
+  const d = n % 10, t = n % 100;
+  return d >= 2 && d <= 4 && (t < 12 || t > 14) ? few : many;
+}
+
 export type SP = Promise<{ ok?: string; err?: string }>;

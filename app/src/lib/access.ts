@@ -12,6 +12,7 @@ export const CAN = {
   media: ["guardian", "family", "friend"],
   reminders: ["guardian", "family"],
   messages: ["guardian", "family", "friend"],
+  propose: ["friend"], // znajomi proponują kontakty; rodzina dodaje je od razu
   look: ["guardian", "family"],
   weather: ["guardian", "family"],
   wifi: ["guardian", "family"],

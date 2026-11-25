@@ -1,4 +1,5 @@
-import { addContact, deleteContact, moveContact, removeContactPhoto, updateContact } from "../actions";
+import { addContact, deleteContact, moveContact, removeContactPhoto, reviewProposal, updateContact } from "../actions";
+import { admin } from "@/lib/supabase/admin";
 import { PhotoUpload } from "./PhotoUpload";
 import { requireMember } from "@/lib/access";
 import { CONTACT_COLORS, type Contact } from "@/lib/schema";
@@ -49,6 +50,12 @@ export default async function Contacts({
   const s = currentSettings(device.settings);
   const guardian = role === "guardian";
   const editing = s.contacts.find((c) => c.id === edit);
+  const { data: proposals } = await admin()
+    .from("contact_proposals")
+    .select("id, author, name, number")
+    .eq("device_id", id)
+    .eq("status", "pending")
+    .order("id", { ascending: true });
 
   return (
     <main>
@@ -56,6 +63,26 @@ export default async function Contacts({
       <h1>Kontakty</h1>
       <p className="dim">Ta kolejność jest pod przyciskiem Dzwoń. Najważniejsze osoby na górze. Dotknij osoby, żeby ją zmienić.</p>
       <Flash ok={ok} err={err} />
+      {!editing && (proposals ?? []).length > 0 && (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Propozycje od znajomych</h2>
+          <ul className="list">
+            {(proposals ?? []).map((pr) => (
+              <li key={pr.id} style={{ padding: "8px 0" }}>
+                <b>{pr.name}</b> <span className="dim small">{pr.number} · proponuje: {pr.author}</span>
+                <div className="row" style={{ marginTop: 6 }}>
+                  <form action={reviewProposal.bind(null, id, pr.id, true)} className="grow">
+                    <button className="btn primary small block">Dodaj do LUMI</button>
+                  </form>
+                  <form action={reviewProposal.bind(null, id, pr.id, false)} className="grow">
+                    <button className="btn small block">Nie dodawaj</button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {editing ? (
         <form action={updateContact.bind(null, id, editing.id)} className="card">

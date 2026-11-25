@@ -82,6 +82,20 @@ create table if not exists messages (
 create index if not exists messages_device on messages (device_id, id desc);
 alter table messages enable row level security;
 
+-- Propozycje kontaktów od znajomych (znajomi nie widzą listy kontaktów, opiekun/rodzina akceptuje)
+create table if not exists contact_proposals (
+  id bigserial primary key,
+  device_id text not null references devices on delete cascade,
+  user_id uuid references auth.users on delete set null,
+  author text not null,
+  name text not null check (char_length(name) between 1 and 24),
+  number text not null,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
+  created_at timestamptz not null default now()
+);
+create index if not exists contact_proposals_device on contact_proposals (device_id, status);
+alter table contact_proposals enable row level security;
+
 -- Powiadomienia push (Web Push) - jedna subskrypcja na przeglądarkę/telefon
 create table if not exists push_subscriptions (
   endpoint text primary key,

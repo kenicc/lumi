@@ -3,7 +3,7 @@
 type Row = Record<string, unknown>;
 
 export function memoryDb() {
-  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [], reminder_events: [], messages: [] };
+  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [], reminder_events: [], messages: [], contact_proposals: [] };
 
   let seq = 1000;
   function query(table: string) {

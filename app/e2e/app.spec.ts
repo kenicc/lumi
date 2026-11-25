@@ -64,6 +64,24 @@ test("API urządzenia bez sekretu jest zamknięte", async ({ request }) => {
   expect(r.status()).toBe(401);
 });
 
+test("propozycja kontaktu od znajomej: opiekun dodaje jednym przyciskiem", async ({ page }) => {
+  await page.goto(D);
+  await expect(page.getByText("1 nowa propozycja")).toBeVisible();
+  await page.goto(`${D}/kontakty`);
+  const sec = page.locator("section", { has: page.getByRole("heading", { name: "Propozycje od znajomych" }) });
+  await expect(sec).toContainText("Pani Zosia");
+  await sec.getByRole("button", { name: "Dodaj do LUMI" }).click();
+  await expect(page.locator(".flash.ok")).toContainText("Zapisano");
+  await expect(page.getByRole("heading", { name: "Propozycje od znajomych" })).toHaveCount(0);
+  await expect(page.locator("li", { hasText: "Pani Zosia" }).first()).toBeVisible();
+});
+
+test("strona dla znajomych jest niedostępna dla opiekuna (role sprawdza serwer)", async ({ page }) => {
+  await page.goto(`${D}/zaproponuj`);
+  await expect(page).toHaveURL(new RegExp(`${D}\\?err=`));
+  await expect(page.locator(".flash.err")).toContainText("Brak uprawnień");
+});
+
 test("strona prywatności jest dostępna bez logowania", async ({ page }) => {
   await page.goto("/prywatnosc");
   await expect(page.getByRole("heading", { name: "Czego nie zbieramy" })).toBeVisible();

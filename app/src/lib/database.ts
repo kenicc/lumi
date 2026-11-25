@@ -41,6 +41,10 @@ export interface Database {
         { id: number; device_id: string; user_id: string | null; author: string; summary: string; version: number; created_at: string },
         "device_id" | "author" | "summary" | "version"
       >;
+      contact_proposals: Table<
+        { id: number; device_id: string; user_id: string | null; author: string; name: string; number: string; status: string; created_at: string },
+        "device_id" | "author" | "name" | "number"
+      >;
       messages: Table<
         { id: number; device_id: string; user_id: string | null; author: string; text: string; created_at: string; read_at: string | null },
         "device_id" | "author" | "text"

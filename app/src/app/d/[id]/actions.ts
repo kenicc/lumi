@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getProfile, requireMember } from "@/lib/access";
 import { bool, move, newId, num, str } from "@/lib/form";
-import { CONTACT_COLORS, type Media } from "@/lib/schema";
+import { CONTACT_COLORS, ContactSchema, type Media } from "@/lib/schema";
 import { deleteDeviceFiles } from "@/lib/cleanup";
 import { processPhoto } from "@/lib/photo";
 import { saveSettings } from "@/lib/store";
@@ -266,4 +266,34 @@ export async function sendMessage(id: string, fd: FormData) {
   await admin().from("messages").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Rodzina", text });
   revalidatePath(p(id, "/wiadomosci"));
   redirect(p(id, "/wiadomosci?ok=1"));
+}
+
+// ---------- propozycje kontaktów (znajomi) ----------
+
+export async function proposeContact(id: string, fd: FormData) {
+  const { user } = await requireMember(id, "propose");
+  const back = p(id, "/zaproponuj");
+  const parsed = ContactSchema.pick({ name: true, number: true }).safeParse({ name: str(fd, "name"), number: str(fd, "number") });
+  if (!parsed.success) redirect(`${back}?err=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane")}`);
+  const profile = await getProfile(user.id);
+  await admin().from("contact_proposals").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Znajomy", ...parsed.data });
+  revalidatePath(back);
+  redirect(`${back}?ok=1`);
+}
+
+export async function reviewProposal(id: string, proposalId: number, accept: boolean) {
+  await requireMember(id, "contacts");
+  const db = admin();
+  const { data: pr } = await db.from("contact_proposals").select("*").eq("id", proposalId).eq("device_id", id).eq("status", "pending").maybeSingle();
+  if (!pr) redirect(p(id, `/kontakty?err=${encodeURIComponent("Ta propozycja jest już rozpatrzona")}`));
+  await db.from("contact_proposals").update({ status: accept ? "accepted" : "rejected" }).eq("id", proposalId);
+  if (!accept) {
+    revalidatePath(p(id, "/kontakty"));
+    redirect(p(id, "/kontakty"));
+  }
+  return saveSettings(id, "contacts", (s) => {
+    if (s.contacts.length >= 30) return "Najwięcej 30 kontaktów";
+    const used = new Set(s.contacts.map((c) => c.color));
+    s.contacts.push({ id: newId(), name: pr.name, number: pr.number, color: CONTACT_COLORS.find((c) => !used.has(c)) ?? CONTACT_COLORS[0], autoAnswer: false });
+  }, p(id, "/kontakty"));
 }

@@ -6,10 +6,11 @@ import { batteryText, isOnline, signalText } from "@/lib/status";
 import { currentSettings } from "@/lib/store";
 import { ROLE_NAMES } from "@/lib/types";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { Flash, Top, ago, type SP } from "@/components/ui";
+import { Flash, Top, ago, plural, type SP } from "@/components/ui";
 
 const SECTIONS: { href: string; ico: string; title: string; desc: string; section: Section }[] = [
   { href: "kontakty", ico: "📞", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
+  { href: "zaproponuj", ico: "➕", title: "Zaproponuj kontakt", desc: "opiekun zdecyduje, czy dodać", section: "propose" },
   { href: "ekran", ico: "🏠", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
   { href: "wiadomosci", ico: "💬", title: "Wiadomości", desc: "krótki tekst na ekran LUMI", section: "messages" },
   { href: "przypomnienia", ico: "⏰", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
@@ -50,6 +51,11 @@ export default async function Device({ params, searchParams }: { params: Promise
     .eq("device_id", id)
     .gt("at", new Date(Date.now() - 36 * 3600 * 1000).toISOString());
   const plan = todayPlan(currentSettings(d.settings).reminders, (evs ?? []) as ReminderEvent[]);
+  const { count: pendingProposals } = await admin()
+    .from("contact_proposals")
+    .select("id", { count: "exact", head: true })
+    .eq("device_id", id)
+    .eq("status", "pending");
   const online = isOnline(d);
   const pending = d.applied_version < d.config_version;
 
@@ -102,6 +108,7 @@ export default async function Device({ params, searchParams }: { params: Promise
               <span className="ico" aria-hidden>{s.ico}</span>
               <span>
                 <b>{s.title}</b>
+                {s.section === "contacts" && (pendingProposals ?? 0) > 0 && <span className="badge"> {pendingProposals} {plural(pendingProposals!, "nowa propozycja", "nowe propozycje", "nowych propozycji")}</span>}
                 <br />
                 <span className="dim small">{s.desc}</span>
               </span>

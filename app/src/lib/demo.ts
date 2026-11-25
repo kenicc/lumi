@@ -45,6 +45,7 @@ function seed(): Db {
   db.tables.profiles.push({ user_id: "u-marek", display_name: "Marek", form: "m" });
   db.tables.members.push({ device_id: "LUMI-C3D4E5", user_id: DEMO_USER.id, role: "guardian" });
   db.tables.members.push({ device_id: "LUMI-C3D4E5", user_id: "u-marek", role: "family" });
+  db.tables.contact_proposals.push({ id: 1, device_id: "LUMI-C3D4E5", user_id: "u-kasia", author: "Kasia", name: "Pani Zosia", number: "+48 607 800 900", status: "pending", created_at: new Date(now - 3600_000).toISOString() });
   db.tables.invites.push({ id: "i1", device_id: "LUMI-C3D4E5", email: "kasia@example.com", role: "friend" });
   const ch = (v: number, author: string, summary: string, minAgo: number) =>
     db.tables.changes.push({ id: v, device_id: "LUMI-C3D4E5", author, summary, version: v, created_at: new Date(now - minAgo * 60_000).toISOString() });
