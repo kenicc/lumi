@@ -11,17 +11,18 @@ const Body = z.object({
   pair: z.string().regex(/^[A-Z2-9]{8}$/),
   variant: z.string().max(16).optional(),
   fw: z.string().max(32).optional(),
+  build: z.number().int().min(0).optional(),
 });
 
 export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
-  const { id, secret, pair, variant, fw } = parsed.data;
+  const { id, secret, pair, variant, fw, build } = parsed.data;
   const db = admin();
   const { data: existing } = await db.from("devices").select("id, secret_hash").eq("id", id).maybeSingle();
   const now = new Date().toISOString();
   if (!existing) {
-    const { error } = await db.from("devices").insert({ id, secret_hash: sha256(secret), pair_hash: sha256(pair), variant, fw, last_seen: now });
+    const { error } = await db.from("devices").insert({ id, secret_hash: sha256(secret), pair_hash: sha256(pair), variant, fw, fw_build: build ?? 0, last_seen: now });
     if (error) return NextResponse.json({ error: "db" }, { status: 500 });
     return NextResponse.json({ claimed: false });
   }
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   const claimed = await isClaimed(id);
   await db
     .from("devices")
-    .update({ variant, fw, last_seen: now, ...(claimed ? {} : { pair_hash: sha256(pair) }) })
+    .update({ variant, fw, fw_build: build ?? 0, last_seen: now, ...(claimed ? {} : { pair_hash: sha256(pair) }) })
     .eq("id", id);
   return NextResponse.json({ claimed });
 }

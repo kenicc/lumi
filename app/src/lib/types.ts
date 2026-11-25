@@ -16,6 +16,10 @@ export interface DeviceStatus {
   wifiRssi?: number;
   uptime?: number;
   variant?: string;
+  build?: number;
+  reset?: string;
+  boots?: number;
+  errors?: string[];
 }
 
 export interface DeviceRow {
@@ -30,6 +34,7 @@ export interface DeviceRow {
   status: DeviceStatus | null;
   variant: string | null;
   fw: string | null;
+  fw_build: number;
   last_seen: string | null;
 }
 

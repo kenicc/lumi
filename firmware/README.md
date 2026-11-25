@@ -63,6 +63,22 @@ Interfejs da się testować bez przylutowanych przycisków: `key call`, `key mid
 
 Przytrzymanie Home przez 5 s otwiera ekran serwisowy dla rodziny: informacje o połączeniu, kod parowania (gdy LUMI zostało usunięte z aplikacji) i przycisk "Wi-Fi" uruchamiający sieć LUMI do podania nowej sieci (np. po przeprowadzce).
 
+## Aktualizacje przez Wi-Fi (OTA)
+
+Nowe wersje trafiają do urządzeń same, bez kabla. Instalują się w nocy (2:00-5:00), gdy LUMI nic nie robi i ma co najmniej 50% baterii albo ładowarkę.
+
+1. Raz: `python3 tools/gen_ota_key.py`. Klucz prywatny zostaje w `keys/` (poza repozytorium), a publiczny trafia do firmware. Urządzenie z pustym kluczem nie przyjmie żadnej aktualizacji.
+2. Każde wydanie: podbij `LUMI_FW_BUILD` w `src/Version.h`, zbuduj (`pio run -e allegro`), potem `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... python3 tools/release.py allegro --notes "..."`.
+3. Test od razu, bez czekania na noc: w konsoli `ota`.
+
+Zabezpieczenia:
+- Obraz musi mieć zgodny skrót SHA-256 i podpis ECDSA P-256. Bez tego jest odrzucany, zanim stanie się aktywny.
+- Nowa wersja zapisuje się na drugą partycję. Jeśli 3 razy z rzędu nie dotrwa do 3 minut pracy, LUMI wraca do poprzedniej i nie pobiera już tej wersji.
+- Restart po instalacji czeka na koniec rozmowy. Po aktualizacji użytkownik widzi komunikat "LUMI ma nową wersję oprogramowania".
+- Wydanie można wstrzymać: `active = false` w tabeli `firmware_releases`.
+
+Weryfikację podpisu sprawdziłem testem: podpis z `release.py` przechodzi przez ten sam kod mbedtls 2.28 co w urządzeniu, a zmieniony obraz jest odrzucany. Sama instalacja na płytce nie była jeszcze uruchomiona.
+
 ## Struktura
 
 | Katalog | Co robi |

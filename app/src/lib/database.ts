@@ -25,6 +25,8 @@ export interface Database {
           status: Json | null;
           variant: string | null;
           fw: string | null;
+          fw_build: number;
+          offline_alerted: boolean;
           last_seen: string | null;
           created_at: string;
         },
@@ -38,6 +40,22 @@ export interface Database {
       changes: Table<
         { id: number; device_id: string; user_id: string | null; author: string; summary: string; version: number; created_at: string },
         "device_id" | "author" | "summary" | "version"
+      >;
+      firmware_releases: Table<
+        {
+          id: number;
+          variant: string;
+          build: number;
+          version: string;
+          url: string;
+          size: number;
+          sha256: string;
+          signature: string;
+          notes: string;
+          active: boolean;
+          created_at: string;
+        },
+        "variant" | "build" | "version" | "url" | "size" | "sha256" | "signature"
       >;
     };
     Views: Record<string, never>;

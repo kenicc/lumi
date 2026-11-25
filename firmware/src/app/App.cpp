@@ -7,9 +7,11 @@
 #include <esp_sleep.h>
 #include <esp_task_wdt.h>
 
+#include <atomic>
 #include <deque>
 #include <string>
 
+#include "app/Diag.h"
 #include "audio/AudioOut.h"
 #include "core/AtParse.h"
 #include "core/Calendar.h"
@@ -20,6 +22,7 @@
 #include "hw/Input.h"
 #include "modem/Modem.h"
 #include "net/Identity.h"
+#include "net/Ota.h"
 #include "net/Net.h"
 #include "ui/Icons.h"
 #include "ui/Ui.h"
@@ -83,7 +86,10 @@ bool powerHolding = false;
 uint32_t powerHoldAt = 0;
 uint8_t batteryWarned = 100;
 uint8_t ringOverride = 0;  // prototyp bez radia: rolka poza rozmową zmienia głośność dzwonka (0 = jak w aplikacji)
-lv_obj_t* live = nullptr;  // etykieta odświeżana co sekundę (czas rozmowy, odliczanie)
+lv_obj_t* live = nullptr;
+std::atomic<bool> idleFlag{false};
+std::atomic<bool> callFlag{false};
+bool healthyMarked = false;  // etykieta odświeżana co sekundę (czas rozmowy, odliczanie)
 
 // ---------- pomocnicze ----------
 
@@ -1034,7 +1040,7 @@ bool loadFile(const char* path, cfg::Config& out) {
   f.close();
   std::string err;
   if (!cfg::parse(s.data(), s.size(), out, err)) {
-    Serial.printf("[config] %s: %s\n", path, err.c_str());
+    diag::error("[config] %s: %s", path, err.c_str());
     return false;
   }
   return true;
@@ -1101,6 +1107,13 @@ void tick() {
     notices.pop_front();
     ui::notice(IC_INFO, shownNotice.c_str());
     audio::sound(audio::Sound::Notice);
+  }
+
+  idleFlag = !screenOn && call.phase == Phase::None && !audio::state().playing;
+  callFlag = call.phase != Phase::None;
+  if (!healthyMarked && now > 180000) {  // 3 minuty pracy: nowa wersja oprogramowania jest zdrowa
+    healthyMarked = true;
+    ota::markHealthy();
   }
 
   if (now - lastSecond >= 1000) {
@@ -1186,6 +1199,8 @@ void begin() {
   applyConfig();
   scr = ok ? Screen::Home : Screen::Unpaired;
   lastInput = millis();
+  // zasada 5: użytkownik wie, że coś się zmieniło
+  if (ota::updatedThisBoot()) notices.push_back("LUMI ma nową wersję oprogramowania");
   render();
 }
 
@@ -1210,5 +1225,8 @@ bool reloadConfig(bool announce) {
 }
 
 void showNotice(const char* text) { notices.push_back(text); }
+
+bool idleForUpdate() { return idleFlag; }
+bool inCall() { return callFlag; }
 
 }  // namespace app

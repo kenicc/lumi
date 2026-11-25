@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <sys/time.h>
 
+#include "app/Diag.h"
 #include "app/Events.h"
 #include "core/AtParse.h"
 #include "hw/Board.h"
@@ -294,7 +295,7 @@ bool startup() {
   st.ready = true;
   xSemaphoreGive(stMutex);
   bus::post(Event(Ev::ModemReady, sim ? 1 : 0, 0, model));
-  if (!sim) Serial.println("[modem] brak karty SIM lub PIN");
+  if (!sim) diag::error("[modem] brak karty SIM lub PIN");
   return true;
 }
 
@@ -402,7 +403,7 @@ void task(void*) {
   pinMode(pins::MODEM_RI, INPUT_PULLUP);
 
   while (!startup()) {
-    Serial.println("[modem] start nieudany, ponowie za 30 s");
+    diag::error("[modem] start nieudany, ponowie za 30 s");
     bus::post(Event(Ev::ModemFail));
     vTaskDelay(pdMS_TO_TICKS(30000));
   }
@@ -435,7 +436,7 @@ void task(void*) {
         silentPolls = 0;
       } else if (++silentPolls >= 3) {
         // Modem zawiesił się - restart, żeby nie przegapić rozmowy
-        Serial.println("[modem] brak odpowiedzi od 90 s, restart modemu");
+        diag::error("[modem] brak odpowiedzi od 90 s, restart modemu");
         setStatus([](Status& s) { s.ready = false; });
         bus::post(Event(Ev::ModemFail));
         pulsePwrkey(board::MODEM_RESET_ONLY ? 200 : 3000);  // wyłącz (lub reset)

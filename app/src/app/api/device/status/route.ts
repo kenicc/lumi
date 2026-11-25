@@ -19,6 +19,10 @@ const Body = z.object({
   sim: z.boolean().optional(),
   wifiRssi: z.number().optional(),
   uptime: z.number().optional(),
+  build: z.number().int().min(0).optional(),
+  reset: z.string().max(24).optional(),
+  boots: z.number().int().min(0).optional(),
+  errors: z.array(z.string().max(120)).max(8).optional(),
 });
 
 export async function POST(req: Request) {
@@ -33,6 +37,7 @@ export async function POST(req: Request) {
       status: s,
       applied_version: Math.min(s.version, d.config_version),
       fw: s.fw ?? d.fw,
+      fw_build: s.build ?? d.fw_build,
       variant: s.variant ?? d.variant,
       last_seen: new Date().toISOString(),
     })

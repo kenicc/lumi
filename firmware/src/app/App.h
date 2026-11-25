@@ -17,4 +17,9 @@ bool reloadConfig(bool announce);  // z /config.json; announce = pokaż, kto zmi
 const char* deviceId();
 void showNotice(const char* text);
 
+// LUMI nic nie robi (ekran zgaszony, bez rozmowy i muzyki) - można zainstalować aktualizację.
+// Czytane z zadania sieci, dlatego atomowe.
+bool idleForUpdate();
+bool inCall();
+
 }  // namespace app

@@ -10,11 +10,15 @@
 #include <WiFiClientSecure.h>
 #include <WiFiMulti.h>
 
+#include "Version.h"
+#include "app/Diag.h"
 #include "app/Events.h"
 #include "audio/AudioOut.h"
 #include "hw/Battery.h"
 #include "modem/Modem.h"
+#include "app/App.h"
 #include "net/Identity.h"
+#include "net/Ota.h"
 
 extern "C" const uint8_t lumi_ca_bundle[];
 
@@ -29,6 +33,10 @@ wx::Forecast fc;
 volatile bool weatherReq = true;
 volatile bool reportReq = true;
 volatile bool provisionReq = false;
+volatile bool otaForce = false;
+ota::Offer offer;
+uint32_t lastOtaCheck = 0;
+constexpr uint32_t OTA_CHECK_EVERY_MS = 6UL * 3600 * 1000;
 volatile Cloud cloudState = Cloud::NoWifi;
 
 WiFiMulti* multi = nullptr;
@@ -221,7 +229,8 @@ void hello(const Settings& s) {
   d["secret"] = identity::secret();
   d["pair"] = identity::pairCode();
   d["variant"] = LUMI_VARIANT;
-  d["fw"] = __DATE__;
+  d["fw"] = LUMI_FW_VERSION;
+  d["build"] = LUMI_FW_BUILD;
   String b;
   serializeJson(d, b);
   Resp r = request("POST", "/api/device/hello", b, s.version);
@@ -232,10 +241,10 @@ void hello(const Settings& s) {
     setCloud((o["claimed"] | false) ? Cloud::Ok : Cloud::Unclaimed);
   } else if (r.code == 401 || r.code == 403) {
     setCloud(Cloud::AuthError);
-    Serial.println("[serwer] sekret odrzucony - urzadzenie zarejestrowane z innym kluczem");
+    diag::error("[serwer] sekret odrzucony");
   } else {
     setCloud(Cloud::Offline);
-    Serial.printf("[serwer] hello: %d\n", r.code);
+    diag::error("[serwer] hello: %d", r.code);
   }
 }
 
@@ -263,7 +272,7 @@ void syncConfig(const Settings& s) {
   cfg::Config test;
   std::string err;
   if (!cfg::parse(r.body.c_str(), r.body.length(), test, err)) {
-    Serial.printf("[serwer] odrzucona konfiguracja: %s\n", err.c_str());
+    diag::error("[serwer] odrzucona konfiguracja: %s", err.c_str());
     return;
   }
   if (test.version <= s.version) return;
@@ -278,7 +287,12 @@ void report(const Settings& s) {
   JsonDocument d;
   d["version"] = s.version;
   d["variant"] = LUMI_VARIANT;
-  d["fw"] = __DATE__;
+  d["fw"] = LUMI_FW_VERSION;
+  d["build"] = LUMI_FW_BUILD;
+  d["reset"] = diag::resetReason();
+  d["boots"] = diag::bootCount();
+  JsonArray errs = d["errors"].to<JsonArray>();
+  for (const auto& e : diag::recent()) errs.add(e);
   d["battery"] = battery::percent();
   d["batteryMv"] = battery::millivolts();
   d["charging"] = battery::charging();
@@ -293,7 +307,60 @@ void report(const Settings& s) {
   String b;
   serializeJson(d, b);
   Resp r = request("POST", "/api/device/status", b, s.version);
-  if (r.code != 200) Serial.printf("[serwer] status: %d\n", r.code);
+  if (r.code != 200) diag::error("[serwer] status: %d", r.code);
+}
+
+// ---------- aktualizacje ----------
+
+void checkOffer(const Settings& s) {
+  Resp r = request("GET", "/api/device/firmware", "", s.version);
+  if (r.code != 200) {
+    if (r.code != 204) diag::error("[ota] sprawdzenie: %d", r.code);
+    return;
+  }
+  JsonDocument d;
+  if (deserializeJson(d, r.body)) return;
+  ota::Offer o;
+  o.build = d["build"] | 0;
+  o.version = d["version"] | "";
+  o.url = d["url"] | "";
+  o.sha256 = d["sha256"] | "";
+  o.sig = d["sig"] | "";
+  o.size = d["size"] | 0;
+  if (o.build > LUMI_FW_BUILD) {
+    offer = o;
+    Serial.printf("[ota] dostepna wersja %s (build %d)\n", o.version.c_str(), o.build);
+  }
+}
+
+bool goodTimeToUpdate() {
+  time_t t = time(nullptr);
+  if (t < 1700000000) return false;
+  tm l;
+  localtime_r(&t, &l);
+  bool night = l.tm_hour >= 2 && l.tm_hour < 5;
+  bool power = battery::charging() || battery::percent() >= 50;
+  return night && power && app::idleForUpdate();
+}
+
+void maybeUpdate(const Settings& s) {
+  uint32_t now = millis();
+  if (otaForce || !lastOtaCheck || now - lastOtaCheck > OTA_CHECK_EVERY_MS) {
+    lastOtaCheck = now;
+    checkOffer(s);
+  }
+  if (!offer.build || !(otaForce || goodTimeToUpdate())) return;
+  otaForce = false;
+  std::string err;
+  if (!ota::install(offer, err)) {
+    diag::error("[ota] build %d: %s", offer.build, err.c_str());
+    offer = ota::Offer{};
+    return;
+  }
+  // restart dopiero, gdy nikt nie rozmawia (rozmowa może zacząć się w trakcie pobierania)
+  while (app::inCall()) vTaskDelay(pdMS_TO_TICKS(1000));
+  vTaskDelay(pdMS_TO_TICKS(500));
+  ESP.restart();
 }
 
 // ---------- pogoda ----------
@@ -310,7 +377,7 @@ void fetchWeather(const Settings& s) {
   if (!http.begin(url)) return;
   int code = http.GET();
   if (code != 200) {
-    Serial.printf("[pogoda] HTTP %d\n", code);
+    diag::error("[pogoda] HTTP %d", code);
     http.end();
     return;
   }
@@ -419,6 +486,7 @@ void task(void*) {
         report(snapshot());
       }
     }
+    if (helloDone && cloudState == Cloud::Ok && ota::enabled()) maybeUpdate(s);
     if (s.weather && s.version > 0 && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
       weatherReq = false;
       lastWeather = now;
@@ -473,6 +541,7 @@ wx::Forecast forecast() {
 void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
+void checkUpdateNow() { otaForce = true; }
 
 bool saveConfigFile(const char* json, size_t len) {
   File f = LittleFS.open("/config.tmp", "w");

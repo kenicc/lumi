@@ -65,6 +65,31 @@ alter table members enable row level security;
 alter table invites enable row level security;
 alter table changes enable row level security;
 
+-- Zmiany schematu po pierwszej wersji (bezpieczne do ponownego uruchomienia)
+alter table devices add column if not exists fw_build int not null default 0;
+alter table devices add column if not exists offline_alerted boolean not null default false;
+
+-- Wydania oprogramowania (dodaje je firmware/tools/release.py kluczem serwisowym)
+create table if not exists firmware_releases (
+  id bigserial primary key,
+  variant text not null,          -- środowisko PlatformIO: allegro, proto, series
+  build int not null,
+  version text not null,
+  url text not null,
+  size int not null,
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  signature text not null,        -- ECDSA P-256 (DER, base64) nad SHA-256 obrazu
+  notes text not null default '',
+  active boolean not null default true,  -- false = wstrzymaj wydanie
+  created_at timestamptz not null default now(),
+  unique (variant, build)
+);
+alter table firmware_releases enable row level security;
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('firmware', 'firmware', true, 6291456)
+on conflict (id) do nothing;
+
 -- Muzyka od rodziny: publiczny kosz z losowymi nazwami plików (urządzenie pobiera MP3 bez logowania).
 -- Wgrywanie tylko przez podpisany adres wydawany przez serwer po sprawdzeniu roli.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

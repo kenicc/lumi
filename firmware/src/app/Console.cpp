@@ -5,12 +5,15 @@
 
 #include <string>
 
+#include "Version.h"
 #include "app/App.h"
+#include "app/Diag.h"
 #include "audio/AudioOut.h"
 #include "hw/Battery.h"
 #include "hw/Input.h"
 #include "modem/Modem.h"
 #include "net/Identity.h"
+#include "net/Ota.h"
 #include "net/Net.h"
 
 namespace console {
@@ -39,12 +42,16 @@ void help() {
       "  notice <tekst>    pokaz komunikat jak po zmianie od rodziny\n"
       "  wifi <nazwa> <haslo>  dodaj siec Wi-Fi; provision - siec LUMI do konfiguracji z telefonu\n"
       "  server <adres>    adres aplikacji rodziny, np. server https://lumi.vercel.app\n"
-      "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne");
+      "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne\n"
+      "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)");
 }
 
 void status() {
   modem::Status s = modem::status();
-  Serial.printf("urzadzenie: %s (%s)\n", app::deviceId(), LUMI_VARIANT);
+  Serial.printf("urzadzenie: %s (%s), oprogramowanie %s (build %d)\n", app::deviceId(), LUMI_VARIANT, LUMI_FW_VERSION,
+                LUMI_FW_BUILD);
+  Serial.printf("uruchomienie %u, ostatni restart: %s\n", diag::bootCount(), diag::resetReason());
+  for (const auto& e : diag::recent()) Serial.printf("  blad: %s\n", e.c_str());
   Serial.printf("modem: %s, %s %s, fw %s\n", s.ready ? "gotowy" : "nie gotowy", modem::vendorName(s.vendor), s.model,
                 s.fw);
   Serial.printf("SIM: %s, siec: %s, operator: %s, LTE: %s, zasieg: %d/4\n", s.simOk ? "ok" : "brak",
@@ -142,6 +149,9 @@ void exec(char* l) {
   } else if (!strcmp(l, "pair")) {
     Serial.printf("id: %s\nkod: %s\nlink: %s/pair?d=%s&c=%s\n", identity::id(), identity::pairCode(),
                   identity::server().c_str(), identity::id(), identity::pairCode());
+  } else if (!strcmp(l, "ota")) {
+    Serial.println(ota::enabled() ? "sprawdzam aktualizacje..." : "aktualizacje wylaczone: brak klucza (tools/gen_ota_key.py)");
+    net::checkUpdateNow();
   } else if (!strcmp(l, "factory")) {
     Serial.println("przywracam ustawienia fabryczne...");
     identity::factoryReset();

@@ -85,9 +85,28 @@ export default async function Device({ params, searchParams }: { params: Promise
           </ul>
         </>
       )}
-      <p className="dim small">
-        {d.id} · {d.status?.modem ?? d.variant ?? ""} {d.fw ? `· oprogramowanie ${d.fw}` : ""}
-      </p>
+      {role === "guardian" ? (
+        <details className="card">
+          <summary>Diagnostyka</summary>
+          <ul className="small" style={{ paddingLeft: 18 }}>
+            <li>{d.id} · {d.variant ?? "?"} · oprogramowanie {d.fw ?? "?"} (build {d.fw_build})</li>
+            <li>modem: {d.status?.modem ?? "?"}{d.status?.operator ? `, ${d.status.operator}` : ""}</li>
+            <li>
+              uruchomienie nr {d.status?.boots ?? "?"}, ostatni restart: {d.status?.reset ?? "?"}
+              {d.status?.uptime !== undefined && `, działa od ${Math.round(d.status.uptime / 3600)} godz.`}
+            </li>
+            {d.status?.wifiRssi !== undefined && <li>Wi-Fi: {d.status.wifiRssi} dBm</li>}
+          </ul>
+          {(d.status?.errors?.length ?? 0) > 0 && (
+            <>
+              <b className="small">Ostatnie błędy</b>
+              <pre className="small" style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{d.status!.errors!.join("\n")}</pre>
+            </>
+          )}
+        </details>
+      ) : (
+        <p className="dim small">{d.id} · oprogramowanie {d.fw ?? "?"}</p>
+      )}
     </main>
   );
 }

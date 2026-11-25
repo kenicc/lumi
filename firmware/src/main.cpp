@@ -11,11 +11,13 @@
 
 #include "app/App.h"
 #include "app/Console.h"
+#include "app/Diag.h"
 #include "app/Events.h"
 #include "hw/Battery.h"
 #include "hw/Board.h"
 #include "hw/Display.h"
 #include "hw/Input.h"
+#include "net/Ota.h"
 
 // Po wybudzeniu przyciskiem: włącz dopiero po przytrzymaniu (przypadkowe naciśnięcie w torbie nie włącza)
 static void requireHoldToPowerOn() {
@@ -33,10 +35,12 @@ static void requireHoldToPowerOn() {
 void setup() {
   requireHoldToPowerOn();
   Serial.begin(115200);
+  ota::begin();  // przed resztą: jeśli nowa wersja nie wstaje, wróć do poprzedniej
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
   tzset();
   if (!LittleFS.begin(true)) Serial.println("[fs] LittleFS niedostepny");
 
+  diag::begin();
   bus::begin();
   display::begin();
   input::begin();
