@@ -10,6 +10,7 @@
 #include "core/Calendar.h"
 #include "core/Config.h"
 #include "core/Pairing.h"
+#include "core/ReminderQueue.h"
 #include "core/Weather.h"
 
 void setUp() {}
@@ -236,6 +237,43 @@ void test_reminders() {
   TEST_ASSERT_FALSE(c.reminders[1].confirm);
 }
 
+void test_reminder_queue() {
+  rem::Queue q;
+  q.add({"a", "Leki", 480, true, 0, 0});
+  q.add({"b", "Obiad", 480, false, 0, 0});
+  TEST_ASSERT_TRUE(q.start(1000));
+  TEST_ASSERT_EQUAL_STRING("a", q.current().id.c_str());
+  TEST_ASSERT_FALSE(q.start(1000));  // jedno naraz
+
+  // odłożenie: wraca po 10 min, najwyżej 2 razy
+  TEST_ASSERT_TRUE(q.snooze(1000));
+  TEST_ASSERT_TRUE(q.start(2000));  // w międzyczasie drugie przypomnienie
+  TEST_ASSERT_EQUAL_STRING("b", q.current().id.c_str());
+  q.finish();
+  TEST_ASSERT_FALSE(q.start(2000 + 60000));  // "a" jeszcze odłożone
+  uint32_t t = 1000 + rem::Queue::SNOOZE_MS;
+  TEST_ASSERT_TRUE(q.start(t));
+  TEST_ASSERT_TRUE(q.snooze(t));
+  t += rem::Queue::SNOOZE_MS;
+  TEST_ASSERT_TRUE(q.start(t));
+  TEST_ASSERT_FALSE(q.canSnooze());
+  TEST_ASSERT_FALSE(q.snooze(t));
+
+  // dźwięk co minutę, rozmowa wstrzymuje licznik, po 10 min bez potwierdzenia
+  TEST_ASSERT_FALSE(q.tick(t + 30000, false, 100).beep);
+  TEST_ASSERT_TRUE(q.tick(t + 60000, false, 100).beep);
+  q.tick(t + 9 * 60000, true, 5 * 60000);  // 5 min rozmowy
+  TEST_ASSERT_EQUAL((int)rem::Timeout::None, (int)q.tick(t + 11 * 60000, false, 100).timeout);
+  TEST_ASSERT_EQUAL((int)rem::Timeout::Missed, (int)q.tick(t + 16 * 60000, false, 100).timeout);
+  TEST_ASSERT_FALSE(q.active());
+
+  // bez potwierdzania: po czasie "przypomniane", nie "bez potwierdzenia"
+  rem::Queue q2;
+  q2.add({"c", "Woda", 600, false, 0, 0});
+  q2.start(0);
+  TEST_ASSERT_EQUAL((int)rem::Timeout::Shown, (int)q2.tick(rem::Queue::TIMEOUT_MS + 1, false, 100).timeout);
+}
+
 void test_config_broken() {
   cfg::Config c;
   std::string err;
@@ -298,6 +336,7 @@ int main() {
   RUN_TEST(test_config_parse);
   RUN_TEST(test_config_broken);
   RUN_TEST(test_reminders);
+  RUN_TEST(test_reminder_queue);
   RUN_TEST(test_contract);
   return UNITY_END();
 }

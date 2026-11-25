@@ -19,6 +19,7 @@
 #include "core/AtParse.h"
 #include "core/Calendar.h"
 #include "core/Pairing.h"
+#include "core/ReminderQueue.h"
 #include "hw/Battery.h"
 #include "hw/Board.h"
 #include "hw/Display.h"
@@ -77,21 +78,8 @@ Missed missed;
 std::deque<std::string> notices;
 std::string shownNotice;  // aktualnie widoczny - wraca do kolejki, gdy przerwie go rozmowa
 
-// Przypomnienia od rodziny: kolejka (kilka o tej samej porze, odłożone "na później") i aktywne
-struct Due {
-  std::string id, text;
-  int minute = 0;
-  bool confirm = true;
-  uint8_t snoozes = 0;
-  uint32_t fireAt = 0;  // millis(); 0 = od razu
-};
-constexpr uint32_t SNOOZE_MS = 10UL * 60 * 1000;
-constexpr uint32_t REMINDER_TIMEOUT_MS = 10UL * 60 * 1000;
-constexpr uint8_t MAX_SNOOZES = 2;
-std::deque<Due> remQueue;
-bool remActive = false;
-Due rem;
-uint32_t remShownAt = 0, remBeepAt = 0;
+// Przypomnienia od rodziny (logika w core/ReminderQueue - testowana na komputerze)
+rem::Queue reminders;
 Screen remPrev = Screen::Home;
 Preferences prefs;
 
@@ -629,7 +617,8 @@ void renderReminder() {
   auto& F = ui::fonts();
   lv_obj_t* col = ui::column(ui::content(), 4);
   char t[16];
-  snprintf(t, sizeof t, "%d:%02d", rem.minute / 60, rem.minute % 60);
+  const rem::Item& r = reminders.current();
+  snprintf(t, sizeof t, "%d:%02d", r.minute / 60, r.minute % 60);
   lv_obj_t* row = lv_obj_create(col);
   lv_obj_remove_style_all(row);
   lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
@@ -638,10 +627,10 @@ void renderReminder() {
   lv_obj_set_style_pad_column(row, 10, 0);
   ui::label(row, F.icon, P.accent, IC_BELL);
   ui::label(row, F.body, P.accent, t);
-  ui::label(col, F.title, P.text, rem.text.c_str(), true);
+  ui::label(col, F.title, P.text, r.text.c_str(), true);
   ui::setRail(0, IC_CHECK, "Zrobione", ui::Tone::Yes);
   ui::hideRail(1);
-  if (rem.snoozes < MAX_SNOOZES) ui::setRail(2, IC_CLOSE, "Później", ui::Tone::Neutral);
+  if (reminders.canSnooze()) ui::setRail(2, IC_CLOSE, "Później", ui::Tone::Neutral);
   else ui::hideRail(2);
 }
 
@@ -771,7 +760,7 @@ void silence() {
 
 // ---------- przypomnienia ----------
 
-void reminderEvent(const Due& d, const char* status) {
+void reminderEvent(const rem::Item& d, const char* status) {
   JsonDocument j;
   j["type"] = "reminder";
   j["id"] = d.id;
@@ -784,52 +773,41 @@ void reminderEvent(const Due& d, const char* status) {
   net::queueEvent(out);
 }
 
-void finishReminder(const char* status) {
-  if (!remActive) return;
-  reminderEvent(rem, status);
-  remActive = false;
+void leaveReminder() {
   scr = remPrev;
   render();
+}
+
+void finishReminder(const char* status) {
+  if (!reminders.active()) return;
+  reminderEvent(reminders.current(), status);
+  reminders.finish();
+  leaveReminder();
 }
 
 void snoozeReminder() {
-  if (!remActive) return;
-  if (rem.snoozes >= MAX_SNOOZES) return;
-  rem.snoozes++;
-  rem.fireAt = millis() + SNOOZE_MS;
-  reminderEvent(rem, "snoozed");
-  remQueue.push_back(rem);
-  remActive = false;
-  scr = remPrev;
-  render();
+  rem::Item it = reminders.current();
+  if (!reminders.snooze(millis())) return;
+  reminderEvent(it, "snoozed");
+  leaveReminder();
 }
 
 void startReadyReminder() {
-  uint32_t now = millis();
-  for (auto it = remQueue.begin(); it != remQueue.end(); ++it) {
-    if (it->fireAt && (int32_t)(now - it->fireAt) < 0) continue;
-    rem = *it;
-    remQueue.erase(it);
-    remActive = true;
-    remPrev = (scr == Screen::Confirm || scr == Screen::Reminder) ? Screen::Home : scr;
-    scr = Screen::Reminder;
-    if (ui::noticeVisible()) {  // przypomnienie ważniejsze niż komunikat o zmianie
-      notices.push_front(shownNotice);
-      ui::dismissNotice();
-    }
-    wake();
-    render();
-    audio::sound(audio::Sound::Notice);
-    remShownAt = remBeepAt = now;
-    return;
+  if (!reminders.start(millis())) return;
+  remPrev = (scr == Screen::Confirm || scr == Screen::Reminder) ? Screen::Home : scr;
+  scr = Screen::Reminder;
+  if (ui::noticeVisible()) {  // przypomnienie ważniejsze niż komunikat o zmianie
+    notices.push_front(shownNotice);
+    ui::dismissNotice();
   }
+  wake();
+  render();
+  audio::sound(audio::Sound::Notice);
 }
 
 void checkReminders(const tm& l) {
   if (!haveConfig || !timeValid()) return;
-  int m = l.tm_hour * 60 + l.tm_min;
-  for (const auto& r : C.reminders)
-    if (cfg::reminderDue(r, l.tm_wday, m)) remQueue.push_back({r.id, r.text, r.minute, r.confirm, 0, 0});
+  reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
 }
 
 // Prawa kolumna: znaczenie zależy od ekranu, ale góra = tak, dół = nie/wstecz tam, gdzie to możliwe
@@ -1061,10 +1039,10 @@ void onKey(Key k, Ev type) {
   if (type != Ev::KeyShort) return;
 
   // Dolny rząd: zawsze to samo, na każdym ekranie
-  if (scr == Screen::Reminder && call.phase == Phase::None && remActive) {
+  if (scr == Screen::Reminder && call.phase == Phase::None && reminders.active()) {
     // wyjście z przypomnienia bez potwierdzenia = przypomnij później (albo brak potwierdzenia)
-    if (!rem.confirm) finishReminder("shown");
-    else if (rem.snoozes < MAX_SNOOZES) snoozeReminder();
+    if (!reminders.current().confirm) finishReminder("shown");
+    else if (reminders.canSnooze()) snoozeReminder();
     else finishReminder("missed");
   }
   if (call.phase != Phase::None) {
@@ -1175,7 +1153,7 @@ void onEnded(bool answered, const char* text) {
   audio::callMode(false);
   call = Call{};
   // przypomnienie przerwane rozmową wraca na ekran
-  scr = remActive ? Screen::Reminder : (haveConfig ? Screen::Home : Screen::Unpaired);
+  scr = reminders.active() ? Screen::Reminder : (haveConfig ? Screen::Home : Screen::Unpaired);
   wake();
   render();
 }
@@ -1255,10 +1233,7 @@ void tick() {
   if (now - lastTick < 100) return;
   uint32_t dt = now - lastTick;
   lastTick = now;
-  if (remActive && call.phase != Phase::None) {  // rozmowa nie zjada czasu na potwierdzenie
-    remShownAt += dt;
-    remBeepAt += dt;
-  }
+  rem::Queue::Tick rt = reminders.tick(now, call.phase != Phase::None, dt);
 
   if (powerHolding && (C.allowPowerOff || !haveConfig) && now - powerHoldAt > 300)
     ui::powerHold(true, now - powerHoldAt, POWER_LONG_MS);
@@ -1280,16 +1255,14 @@ void tick() {
   if (scr == Screen::Confirm && call.phase == Phase::None && now - confirmAt > CONFIRM_TIMEOUT_MS) go(Screen::Home);
 
   // przypomnienia: start, powtarzanie dźwięku co minutę, koniec bez potwierdzenia po 10 min
-  if (!remActive && call.phase == Phase::None && !remQueue.empty()) startReadyReminder();
-  if (remActive && call.phase == Phase::None) {
-    lastInput = now;  // ekran nie gaśnie, dopóki przypomnienie czeka
-    if (now - remBeepAt > 60000) {
-      remBeepAt = now;
-      audio::sound(audio::Sound::Notice);
-    }
+  if (call.phase == Phase::None && !reminders.active() && reminders.pending()) startReadyReminder();
+  if (rt.beep) audio::sound(audio::Sound::Notice);
+  if (rt.timeout != rem::Timeout::None) {
     // bez potwierdzania: po prostu "przypomniane"; z potwierdzaniem: rodzina dostanie powiadomienie
-    if (now - remShownAt > REMINDER_TIMEOUT_MS) finishReminder(rem.confirm ? "missed" : "shown");
+    reminderEvent(reminders.current(), rt.timeout == rem::Timeout::Missed ? "missed" : "shown");
+    leaveReminder();
   }
+  if (reminders.active() && call.phase == Phase::None) lastInput = now;  // ekran nie gaśnie, dopóki czeka
 
   if (screenOn && call.phase == Phase::None && now - lastInput > C.screenOffSec * 1000UL) {
     screenOn = false;
@@ -1433,7 +1406,7 @@ bool idleForUpdate() { return idleFlag; }
 
 void testReminder(const char* text) {
   tm l = now_tm();
-  remQueue.push_back({"test", text, l.tm_hour * 60 + l.tm_min, true, 0, 0});
+  reminders.add({"test", text, l.tm_hour * 60 + l.tm_min, true, 0, 0});
 }
 bool inCall() { return callFlag; }
 
