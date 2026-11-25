@@ -17,7 +17,7 @@ if [ ! -f $OBJ/liblvgl.a ]; then
   ar rcs $OBJ/liblvgl.a $OBJ/lv_*.o
 fi
 for f in src/ui/fonts/*.c; do gcc -O1 -w $INC -c "$f" -o "$OBJ/$(basename "$f" .c).o"; done
-g++ -std=gnu++17 -O1 -g $INC sim/sim.cpp src/app/App.cpp src/ui/Ui.cpp src/core/*.cpp $OBJ/lumi_*.o $OBJ/liblvgl.a -o $OBJ/lumi_sim
+g++ -std=gnu++17 -O1 -g $INC sim/sim.cpp src/app/App.cpp src/app/Screens.cpp src/ui/Ui.cpp src/core/*.cpp $OBJ/lumi_*.o $OBJ/liblvgl.a -o $OBJ/lumi_sim
 # przykładowe zdjęcie kontaktu: ilustracja przepuszczona przez potok serwera (app/src/lib/photo.ts)
 mkdir -p sim/out/cfg/ph
 if [ -d ../app/node_modules/sharp ]; then
