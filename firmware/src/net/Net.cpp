@@ -11,6 +11,7 @@
 #include <WiFiMulti.h>
 
 #include <deque>
+#include <set>
 
 #include "Version.h"
 #include "app/Diag.h"
@@ -36,6 +37,7 @@ volatile bool weatherReq = true;
 volatile bool reportReq = true;
 volatile bool provisionReq = false;
 volatile bool otaForce = false;
+bool msgDue = true;  // wiadomości sprawdzamy w tym samym rytmie co konfigurację
 std::deque<std::string> events;  // chroniona przez mtx
 constexpr size_t MAX_EVENTS = 30;
 ota::Offer offer;
@@ -368,6 +370,30 @@ void syncPhotos(const Settings& s) {
 
 // ---------- zdarzenia ----------
 
+// ---------- wiadomości ----------
+
+std::vector<Message> inbox;  // chronione przez mtx
+std::set<int> seenMessages;
+
+void fetchMessages(const Settings& s) {
+  Resp r = request("GET", "/api/device/messages", "", s.version);
+  if (r.code != 200) return;
+  JsonDocument d;
+  if (deserializeJson(d, r.body)) return;
+  bool any = false;
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  for (JsonObject o : d.as<JsonArray>()) {
+    int id = o["id"] | 0;
+    if (!id || seenMessages.count(id)) continue;
+    seenMessages.insert(id);
+    inbox.push_back({id, o["author"] | "", o["text"] | "", o["at"] | 0LL});
+    any = true;
+  }
+  if (seenMessages.size() > 200) seenMessages.erase(seenMessages.begin());
+  xSemaphoreGive(mtx);
+  if (any) bus::post(Event(Ev::MessagesArrived));
+}
+
 void flushEvents(const Settings& s) {
   for (int i = 0; i < 5; i++) {  // kilka na obieg, żeby nie blokować reszty
     xSemaphoreTake(mtx, portMAX_DELAY);
@@ -554,6 +580,7 @@ void task(void*) {
       if (helloDone && (!lastSync || now - lastSync > every)) {
         lastSync = now;
         syncConfig(s);
+        msgDue = true;
       }
       if (helloDone && cloudState == Cloud::Ok && (reportReq || now - lastReport > REPORT_EVERY_MS)) {
         reportReq = false;
@@ -562,6 +589,10 @@ void task(void*) {
       }
     }
     if (helloDone && cloudState == Cloud::Ok) flushEvents(s);
+    if (helloDone && cloudState == Cloud::Ok && msgDue) {
+      msgDue = false;
+      fetchMessages(s);
+    }
     if (helloDone && cloudState == Cloud::Ok) syncPhotos(s);
     if (helloDone && cloudState == Cloud::Ok && ota::enabled()) maybeUpdate(s);
     if (s.weather && s.version > 0 && (weatherReq || !lastWeather || now - lastWeather > WEATHER_EVERY_MS)) {
@@ -620,6 +651,14 @@ void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
 void checkUpdateNow() { otaForce = true; }
+
+std::vector<Message> takeMessages() {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  std::vector<Message> out;
+  out.swap(inbox);
+  xSemaphoreGive(mtx);
+  return out;
+}
 
 void queueEvent(const std::string& json) {
   xSemaphoreTake(mtx, portMAX_DELAY);

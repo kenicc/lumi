@@ -22,5 +22,6 @@ void showNotice(const char* text);
 bool idleForUpdate();
 bool inCall();
 void testReminder(const char* text);  // konsola: pokaż przypomnienie teraz
+void testMessage(const char* author, const char* text);
 
 }  // namespace app

@@ -26,6 +26,7 @@ enum class Ev : uint8_t {
   MediaState,     // zmiana stanu odtwarzania
   CloudState,     // a = net::Cloud (Wi-Fi, parowanie, serwer)
   PhotosUpdated,  // pobrano nowe zdjęcia kontaktów
+  MessagesArrived,  // nowe wiadomości od rodziny (net::takeMessages)
 };
 
 struct Event {

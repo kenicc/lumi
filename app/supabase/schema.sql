@@ -69,6 +69,19 @@ alter table changes enable row level security;
 alter table devices add column if not exists fw_build int not null default 0;
 alter table devices add column if not exists offline_alerted boolean not null default false;
 
+-- Wiadomości od rodziny (krótki tekst na ekranie LUMI, z potwierdzeniem przeczytania)
+create table if not exists messages (
+  id bigserial primary key,
+  device_id text not null references devices on delete cascade,
+  user_id uuid references auth.users on delete set null,
+  author text not null,
+  text text not null check (char_length(text) between 1 and 120),
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+create index if not exists messages_device on messages (device_id, id desc);
+alter table messages enable row level security;
+
 -- Powiadomienia push (Web Push) - jedna subskrypcja na przeglądarkę/telefon
 create table if not exists push_subscriptions (
   endpoint text primary key,

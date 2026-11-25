@@ -46,7 +46,15 @@ void startProvisioning();
 void checkUpdateNow();
 
 // Zdarzenie dla rodziny (np. potwierdzenie przypomnienia) - czeka w kolejce, gdy brak internetu
-void queueEvent(const std::string& json);  // konsola: sprawdź i zainstaluj aktualizację od razu (bez czekania na noc)
+void queueEvent(const std::string& json);
+
+// Wiadomości od rodziny pobrane z serwera (każda tylko raz)
+struct Message {
+  int id = 0;
+  std::string author, text;
+  long long at = 0;
+};
+std::vector<Message> takeMessages();  // konsola: sprawdź i zainstaluj aktualizację od razu (bez czekania na noc)
 
 bool saveConfigFile(const char* json, size_t len);
 

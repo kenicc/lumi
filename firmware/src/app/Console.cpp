@@ -44,6 +44,7 @@ void help() {
       "  server <adres>    adres aplikacji rodziny, np. server https://lumi.vercel.app\n"
       "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne\n"
       "  remind <tekst>    pokaz przypomnienie teraz (test)\n"
+      "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)");
 }
 
@@ -150,6 +151,8 @@ void exec(char* l) {
   } else if (!strcmp(l, "pair")) {
     Serial.printf("id: %s\nkod: %s\nlink: %s/pair?d=%s&c=%s\n", identity::id(), identity::pairCode(),
                   identity::server().c_str(), identity::id(), identity::pairCode());
+  } else if (!strcmp(l, "msg")) {
+    app::testMessage("Ania", *arg ? arg : "Przyjadę o 15, nie gotuj obiadu");
   } else if (!strcmp(l, "remind")) {
     app::testReminder(*arg ? arg : "Weź leki");
   } else if (!strcmp(l, "ota")) {

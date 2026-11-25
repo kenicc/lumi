@@ -21,6 +21,7 @@ Zrzuty pochodzą z symulatora (`sim/`), który kompiluje ten sam kod ekranów co
 - **Jedna rada pogodowa** zamiast tabeli: "Weź parasol", "Uwaga, ślisko".
 - **Nic się nie dzieje przypadkiem:** pierwsze naciśnięcie przy wygaszonym ekranie tylko go budzi; szybkie wybieranie z ekranu głównego pyta "Zadzwonić do Ani?"; wyłączenie wymaga przytrzymania 3 s z widocznym postępem.
 - **Zdjęcia kontaktów** na liście, przy szybkim wybieraniu i przy rozmowie przychodzącej. Twarz rozpoznaje się szybciej niż imię. Zdjęcia 96×96 leżą w LittleFS i w pamięci PSRAM, więc wyświetlają się bez dekodowania. Bez zdjęcia jest kółko z inicjałem.
+- **Wiadomości od rodziny** na cały ekran. "Dobrze" potwierdza przeczytanie, a "Zadzwoń" oddzwania do autora. Kolejność pierwszeństwa: rozmowa, przypomnienie, wiadomość. Wiadomość czeka na ekranie także po wygaszeniu.
 - **Przypomnienia od rodziny** (leki, posiłki, wizyty) na cały ekran z dźwiękiem co minutę, przyciski "Zrobione" i "Później". Rozmowa ma pierwszeństwo, a przypomnienie wraca po niej.
 - **Nieodebrane połączenie** zostaje na ekranie głównym z przyciskiem "Oddzwoń" (także po restarcie).
 - **Dzwonek narasta** od cichszego do ustawionej głośności; tony w paśmie 400-1000 Hz, które z wiekiem słabną najpóźniej.

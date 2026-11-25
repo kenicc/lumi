@@ -41,6 +41,10 @@ export interface Database {
         { id: number; device_id: string; user_id: string | null; author: string; summary: string; version: number; created_at: string },
         "device_id" | "author" | "summary" | "version"
       >;
+      messages: Table<
+        { id: number; device_id: string; user_id: string | null; author: string; text: string; created_at: string; read_at: string | null },
+        "device_id" | "author" | "text"
+      >;
       reminder_events: Table<
         { id: number; device_id: string; reminder_id: string; text: string; minute: number; status: string; at: string },
         "device_id" | "reminder_id" | "text" | "minute" | "status"

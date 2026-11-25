@@ -11,6 +11,7 @@ export const CAN = {
   home: ["guardian", "family"],
   media: ["guardian", "family", "friend"],
   reminders: ["guardian", "family"],
+  messages: ["guardian", "family", "friend"],
   look: ["guardian", "family"],
   weather: ["guardian", "family"],
   wifi: ["guardian", "family"],

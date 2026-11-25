@@ -11,6 +11,7 @@ import { Flash, Top, ago, type SP } from "@/components/ui";
 const SECTIONS: { href: string; ico: string; title: string; desc: string; section: Section }[] = [
   { href: "kontakty", ico: "📞", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
   { href: "ekran", ico: "🏠", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
+  { href: "wiadomosci", ico: "💬", title: "Wiadomości", desc: "krótki tekst na ekran LUMI", section: "messages" },
   { href: "przypomnienia", ico: "⏰", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
   { href: "radio", ico: "📻", title: "Radio i muzyka", desc: "stacje FM, internetowe, piosenki", section: "media" },
   { href: "wyglad", ico: "🔆", title: "Wygląd i dźwięk", desc: "wielkość tekstu, głośność, cisza nocna", section: "look" },

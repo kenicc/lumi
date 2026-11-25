@@ -113,6 +113,7 @@ void reportSoon() {}
 void startProvisioning() {}
 void queueEvent(const std::string& j) { printf("zdarzenie: %s\n", j.c_str()); }
 std::string photoPath(const std::string& h) { return "/ph/" + h + ".565"; }
+std::vector<Message> takeMessages() { return {}; }
 wx::Forecast forecast() { return fc; }
 void refreshWeather() {}
 bool saveConfigFile(const char*, size_t) { return true; }
@@ -390,5 +391,12 @@ int main() {
   shot("23_przypomnienie_po_rozmowie");
   key(Key::Top);
   shot("24_po_potwierdzeniu");
+
+  // wiadomość od rodziny
+  app::testMessage("Ania", "Przyjadę o 15, nie gotuj obiadu");
+  run(500);
+  shot("25_wiadomosc");
+  key(Key::Top);
+  shot("26_po_przeczytaniu");
   return 0;
 }

@@ -3,8 +3,9 @@
 type Row = Record<string, unknown>;
 
 export function memoryDb() {
-  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [], reminder_events: [] };
+  const tables: Record<string, Row[]> = { devices: [], members: [], changes: [], profiles: [], invites: [], firmware_releases: [], push_subscriptions: [], reminder_events: [], messages: [] };
 
+  let seq = 1000;
   function query(table: string) {
     const filters: ((r: Row) => boolean)[] = [];
     let op: "select" | "update" | "insert" | "delete" | "upsert" = "select";
@@ -59,6 +60,10 @@ export function memoryDb() {
         conflict = opts?.onConflict?.split(",") ?? [Object.keys(p)[0]];
         return q;
       },
+      is(k: string, v: null) {
+        filters.push((r) => (r[k] ?? null) === v);
+        return q;
+      },
       ilike(k: string, v: string) {
         filters.push((r) => String(r[k] ?? "").toLowerCase() === v.toLowerCase());
         return q;
@@ -82,7 +87,7 @@ export function memoryDb() {
     function run(): Row[] {
       if (op === "insert") {
         const list = Array.isArray(payload) ? payload : [payload];
-        tables[table].push(...list.map((r) => ({ ...r })));
+        tables[table].push(...list.map((r) => ({ id: r.id ?? (seq += 1), ...r })));
         return list;
       }
       if (op === "upsert") {

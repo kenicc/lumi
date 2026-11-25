@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireMember } from "@/lib/access";
+import { getProfile, requireMember } from "@/lib/access";
 import { bool, move, newId, num, str } from "@/lib/form";
 import { CONTACT_COLORS, type Media } from "@/lib/schema";
 import { processPhoto } from "@/lib/photo";
@@ -252,4 +252,16 @@ export async function removeContactPhoto(id: string, cid: string) {
     const c = s.contacts.find((k) => k.id === cid);
     if (c) delete c.photo;
   }, p(id, "/kontakty"));
+}
+
+// ---------- wiadomości ----------
+
+export async function sendMessage(id: string, fd: FormData) {
+  const { user } = await requireMember(id, "messages");
+  const text = str(fd, "text").replace(/\s+/g, " ").slice(0, 120);
+  if (!text) redirect(p(id, `/wiadomosci?err=${encodeURIComponent("Wpisz wiadomość")}`));
+  const profile = await getProfile(user.id);
+  await admin().from("messages").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Rodzina", text });
+  revalidatePath(p(id, "/wiadomosci"));
+  redirect(p(id, "/wiadomosci?ok=1"));
 }

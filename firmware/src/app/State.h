@@ -11,11 +11,12 @@
 
 #include "core/Config.h"
 #include "core/ReminderQueue.h"
+#include "net/Net.h"
 
 namespace app {
 namespace detail {
 
-enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired, Service, Reminder };
+enum class Screen : uint8_t { Home, Contacts, Media, Weather, Confirm, Unpaired, Service, Reminder, Message };
 enum class Phase : uint8_t { None, Incoming, Outgoing, Active };
 
 struct Call {
@@ -47,6 +48,7 @@ extern int contactIdx, mediaIdx, confirmIdx, playingIdx;
 extern Call call;
 extern Missed missed;
 extern rem::Queue reminders;
+extern std::deque<net::Message> inbox;  // nieprzeczytane wiadomości, pierwsza jest na ekranie
 extern bool modemReady, simOk, modemFailed;
 extern int highlight;
 extern lv_obj_t* live;  // etykieta odświeżana co sekundę (czas rozmowy, odliczanie)
@@ -61,6 +63,8 @@ template <typename T>
 T clampv(T v, T lo, T hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
+
+int contactIndexByName(const std::string& name);  // -1 gdy autor wiadomości nie jest w kontaktach
 
 // --- ekrany (Screens.cpp) ---
 void render();

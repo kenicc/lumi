@@ -61,6 +61,12 @@ std::string shownNotice;  // aktualnie widoczny - wraca do kolejki, gdy przerwie
 // Przypomnienia od rodziny (logika w core/ReminderQueue - testowana na komputerze)
 rem::Queue reminders;
 Screen remPrev = Screen::Home;
+
+// Wiadomości od rodziny: czekają do przeczytania, po wyjściu bez czytania wracają za 5 minut
+std::deque<net::Message> inbox;
+Screen msgPrev = Screen::Home;
+uint32_t msgDeferUntil = 0;
+constexpr uint32_t MSG_DEFER_MS = 5UL * 60 * 1000;
 Preferences prefs;
 
 uint32_t lastInput = 0;
@@ -117,6 +123,45 @@ void wake() {
 }
 
 // ---------- działania ----------
+
+int contactIndexByName(const std::string& name) {
+  for (size_t i = 0; i < C.contacts.size(); i++)
+    if (strcasecmp(C.contacts[i].name.c_str(), name.c_str()) == 0) return (int)i;
+  return -1;
+}
+
+void startCall(const char* number, int contact);
+
+void showMessage() {
+  msgPrev = (scr == Screen::Confirm || scr == Screen::Message) ? Screen::Home : scr;
+  scr = Screen::Message;
+  wake();
+  render();
+  audio::sound(audio::Sound::Notice);
+}
+
+// "Przeczytane" (albo oddzwonienie): potwierdzenie dla rodziny i następna wiadomość
+void readMessage(bool callBack) {
+  if (inbox.empty()) return;
+  net::Message m = inbox.front();
+  inbox.pop_front();
+  JsonDocument j;
+  j["type"] = "message";
+  j["id"] = m.id;
+  j["status"] = "read";
+  j["at"] = (long long)time(nullptr);
+  std::string out;
+  serializeJson(j, out);
+  net::queueEvent(out);
+  if (callBack) {
+    int k = contactIndexByName(m.author);
+    scr = msgPrev;
+    if (k >= 0) startCall(C.contacts[k].number.c_str(), k);
+    return;
+  }
+  if (inbox.empty()) scr = msgPrev;
+  render();
+}
 
 void startCall(const char* number, int contact) {
   if (!modemReady) {
@@ -319,6 +364,14 @@ void rightAction(int slot) {
       }
       break;
     case Screen::Unpaired: break;
+    case Screen::Message:
+      if (slot == 0) {
+        audio::sound(audio::Sound::Confirm);
+        readMessage(false);
+      } else if (slot == 1) {
+        readMessage(true);
+      }
+      break;
     case Screen::Reminder:
       if (slot == 0) {
         audio::sound(audio::Sound::Confirm);
@@ -453,6 +506,7 @@ void onKey(Key k, Ev type) {
     else if (reminders.canSnooze()) snoozeReminder();
     else finishReminder("missed");
   }
+  if (scr == Screen::Message && call.phase == Phase::None) msgDeferUntil = millis() + MSG_DEFER_MS;  // wróci później
   if (call.phase != Phase::None) {
     ui::toast(call.phase == Phase::Incoming ? "Najpierw odbierz albo odrzuć" : "Najpierw rozłącz rozmowę");
     audio::sound(audio::Sound::Error);
@@ -561,7 +615,8 @@ void onEnded(bool answered, const char* text) {
   audio::callMode(false);
   call = Call{};
   // przypomnienie przerwane rozmową wraca na ekran
-  scr = reminders.active() ? Screen::Reminder : (haveConfig ? Screen::Home : Screen::Unpaired);
+  if (reminders.active()) scr = Screen::Reminder;
+  else if (!(scr == Screen::Message && !inbox.empty())) scr = haveConfig ? Screen::Home : Screen::Unpaired;
   wake();
   render();
 }
@@ -664,6 +719,10 @@ void tick() {
 
   // przypomnienia: start, powtarzanie dźwięku co minutę, koniec bez potwierdzenia po 10 min
   if (call.phase == Phase::None && !reminders.active() && reminders.pending()) startReadyReminder();
+  // wiadomość: po rozmowie i przypomnieniu, nie w trakcie parowania ani na ekranie serwisowym
+  if (call.phase == Phase::None && !reminders.active() && !inbox.empty() && scr != Screen::Message &&
+      scr != Screen::Unpaired && scr != Screen::Service && (int32_t)(now - msgDeferUntil) >= 0)
+    showMessage();
   if (rt.beep) audio::sound(audio::Sound::Notice);
   if (rt.timeout != rem::Timeout::None) {
     // bez potwierdzania: po prostu "przypomniane"; z potwierdzaniem: rodzina dostanie powiadomienie
@@ -676,7 +735,8 @@ void tick() {
     screenOn = false;
     applyBacklight();
     ui::dismissNotice();
-    if (scr != Screen::Unpaired) scr = Screen::Home;  // po wybudzeniu zawsze zegar
+    // po wybudzeniu zawsze zegar - chyba że czeka wiadomość, wtedy ona
+    if (scr != Screen::Unpaired && !(scr == Screen::Message && !inbox.empty())) scr = Screen::Home;
     render();
   }
 
@@ -741,6 +801,14 @@ void handle(const Event& e) {
       break;
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
+    case Ev::MessagesArrived:
+      for (auto& m : net::takeMessages()) {
+        bool dup = false;
+        for (auto& x : inbox) dup |= x.id == m.id;
+        if (!dup) inbox.push_back(m);
+      }
+      msgDeferUntil = 0;  // nowa wiadomość: pokaż od razu
+      break;
     case Ev::PhotosUpdated:
       dropMissingPhotos();
       if (call.phase != Phase::None || scr == Screen::Contacts || scr == Screen::Confirm) render();
@@ -813,6 +881,11 @@ bool reloadConfig(bool announce) {
 void showNotice(const char* text) { notices.push_back(text); }
 
 bool idleForUpdate() { return idleFlag; }
+
+void testMessage(const char* author, const char* text) {
+  static int id = 900000;
+  inbox.push_back({++id, author, text, (long long)time(nullptr)});
+}
 
 void testReminder(const char* text) {
   tm l = now_tm();

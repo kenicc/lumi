@@ -11,6 +11,8 @@ const { GET: config } = await import("@/app/api/device/config/route");
 const { POST: status } = await import("@/app/api/device/status/route");
 const { GET: firmware } = await import("@/app/api/device/firmware/route");
 const { GET: photo } = await import("@/app/api/device/photo/route");
+const { GET: messages } = await import("@/app/api/device/messages/route");
+const { POST: event } = await import("@/app/api/device/event/route");
 
 const ID = "LUMI-C3D4E5";
 const SECRET = "a".repeat(64);
@@ -97,6 +99,26 @@ describe("API urządzenia", () => {
     expect(r.status).toBe(404);
     r = await photo(get(`/api/device/photo?h=${h}`, headers("b".repeat(64))));
     expect(r.status).toBe(401);
+  });
+
+  it("wiadomości: nieprzeczytane dla urządzenia, potwierdzenie przeczytania", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }));
+    db.tables.messages.push(
+      { id: 1, device_id: ID, author: "Ania", text: "Przyjadę o 15", created_at: new Date().toISOString(), read_at: null },
+      { id: 2, device_id: "LUMI-FFFFFF", author: "X", text: "cudza", created_at: new Date().toISOString(), read_at: null },
+    );
+    let r: Response = await messages(get("/api/device/messages"));
+    const list = await r.json();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: 1, author: "Ania", text: "Przyjadę o 15" });
+    r = await event(post("/api/device/event", { type: "message", id: 1, status: "read", at: Math.floor(Date.now() / 1000) }));
+    expect(r.status).toBe(200);
+    expect(db.tables.messages[0].read_at).toBeTruthy();
+    // cudzej wiadomości nie da się oznaczyć
+    await event(post("/api/device/event", { type: "message", id: 2, status: "read" }));
+    expect(db.tables.messages[1].read_at).toBeNull();
+    r = await messages(get("/api/device/messages"));
+    expect(await r.json()).toHaveLength(0);
   });
 
   it("odrzuca zły format danych", async () => {

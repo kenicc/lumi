@@ -518,6 +518,30 @@ void renderReminder() {
   else ui::hideRail(2);
 }
 
+void renderMessage() {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  const net::Message& m = inbox.front();
+  lv_obj_t* col = ui::column(ui::content(), 4);
+  std::string head = std::string(IC_USER " ") + m.author;
+  ui::label(col, F.body, P.accent, head.c_str(), true);
+  // długi tekst mniejszą czcionką, żeby zmieścił się cały
+  const lv_font_t* f = m.text.size() <= 40 ? F.title : (m.text.size() <= 80 ? F.body : F.small);
+  ui::label(col, f, P.text, m.text.c_str(), true);
+  if (m.at > 1700000000) {
+    time_t t = (time_t)m.at;
+    tm l;
+    localtime_r(&t, &l);
+    char b[24];
+    snprintf(b, sizeof b, "%d:%02d", l.tm_hour, l.tm_min);
+    ui::label(col, F.small, P.dim, b);
+  }
+  ui::setRail(0, IC_CHECK, "Dobrze", ui::Tone::Yes);  // "Przeczytane" nie mieści się na przycisku
+  if (contactIndexByName(m.author) >= 0 && C.calls) ui::setRail(1, IC_PHONE, "Zadzwoń", ui::Tone::Yes);
+  else ui::hideRail(1);
+  ui::hideRail(2);
+}
+
 void renderCall() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
@@ -582,6 +606,10 @@ void render() {
       case Screen::Unpaired: renderUnpaired(); break;
       case Screen::Service: renderService(); break;
       case Screen::Reminder: renderReminder(); break;
+      case Screen::Message:
+        if (inbox.empty()) renderHome();
+        else renderMessage();
+        break;
     }
   updateLive();
   firstHighlight();
