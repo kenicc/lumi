@@ -79,3 +79,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Testy klikania (E2E, tryb demo)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e

@@ -102,7 +102,9 @@ export function memoryDb() {
       if (op === "delete") tables[table] = tables[table].filter((r) => !matched.includes(r));
       if (sortBy) {
         const { k, asc } = sortBy;
-        matched.sort((a, b) => ((a[k] as number) - (b[k] as number)) * (asc ? 1 : -1));
+        const cmp = (x: unknown, y: unknown) =>
+          typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+        matched.sort((a, b) => cmp(a[k], b[k]) * (asc ? 1 : -1));
       }
       // jak prawdziwa baza: kopie, nie żywe wiersze
       return head ? [] : matched.slice(0, lim).map((r) => structuredClone(r));

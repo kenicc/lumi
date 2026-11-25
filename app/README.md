@@ -63,6 +63,7 @@ Na telefonie: otwórz adres aplikacji, potem "Dodaj do ekranu początkowego" (iP
 ```bash
 npm test          # schemat, kontrakt z firmware, zdania o zmianach, protokół urządzenia, aktualizacje, powiadomienia
 npm run build
+npm run e2e       # klikanie aplikacji w przeglądarce (tryb demo): pulpit, kontakty, przypomnienia, wiadomości
 ```
 
 ## Świadomie na później
