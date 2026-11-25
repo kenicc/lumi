@@ -45,6 +45,7 @@ void help() {
       "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne\n"
       "  remind <tekst>    pokaz przypomnienie teraz (test)\n"
       "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
+      "  selftest          test sprzetu krok po kroku (albo Home przytrzymany przy wlaczaniu)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)");
 }
 
@@ -151,6 +152,8 @@ void exec(char* l) {
   } else if (!strcmp(l, "pair")) {
     Serial.printf("id: %s\nkod: %s\nlink: %s/pair?d=%s&c=%s\n", identity::id(), identity::pairCode(),
                   identity::server().c_str(), identity::id(), identity::pairCode());
+  } else if (!strcmp(l, "selftest")) {
+    app::startSelfTest();
   } else if (!strcmp(l, "msg")) {
     app::testMessage("Ania", *arg ? arg : "Przyjadę o 15, nie gotuj obiadu");
   } else if (!strcmp(l, "remind")) {

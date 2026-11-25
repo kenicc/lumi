@@ -398,5 +398,42 @@ int main() {
   shot("25_wiadomosc");
   key(Key::Top);
   shot("26_po_przeczytaniu");
+
+  // test sprzętu krok po kroku
+  app::startSelfTest();
+  run(300);
+  shot("27_test_ekran");
+  key(Key::Top);
+  key(Key::Top);
+  key(Key::Music);
+  key(Key::Home);
+  shot("28_test_przyciski");
+  key(Key::Mid);
+  key(Key::Bottom);
+  key(Key::Call);
+  key(Key::Power);
+  bus::post(Event(Ev::Wheel, 3));
+  run(300);
+  bus::post(Event(Ev::Wheel, -3));
+  run(1500);  // modem w atrapie od razu zalogowany
+  key(Key::Top);  // dźwięk słychać
+  key(Key::Top);  // bateria
+  key(Key::Top);  // sieć
+  shot("29_test_wynik");
+  key(Key::Home);
+  shot("30_po_tescie");
+
+  // test z błędami: zły obraz, rolka odwrotnie, brak dźwięku
+  app::startSelfTest();
+  run(300);
+  key(Key::Bottom);
+  for (Key k : {Key::Top, Key::Mid, Key::Bottom, Key::Music, Key::Home, Key::Call, Key::Power}) key(k);
+  bus::post(Event(Ev::Wheel, -3));
+  run(1500);
+  key(Key::Bottom);
+  key(Key::Top);
+  key(Key::Top);
+  shot("31_test_bledy");
+  key(Key::Home);
   return 0;
 }

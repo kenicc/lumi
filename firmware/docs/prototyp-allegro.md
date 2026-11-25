@@ -61,6 +61,10 @@ Poziom baterii odczytuje SIM800L (`AT+CBC`), więc dzielnik na GPIO1 nie jest po
 - **Obraz jest obrócony.** Ustaw `LUMI_ROTATION` (0-3).
 - **Dzwonek SIM800L** gra z głośnika modemu. Głośność ustawia aplikacja (`ringVolume`) albo rolka, a "Cisza" go wycisza.
 
+## Test sprzętu
+
+Po złożeniu przytrzymaj **Home podczas włączania** (albo wpisz `selftest` w konsoli). LUMI przeprowadzi przez 7 kroków: ekran (kolory), każdy przycisk z numerem GPIO, kierunek rolki, modem z kartą SIM i siecią, dźwięk, baterię i Wi-Fi z serwerem. Na końcu pokaże wynik, a w konsoli USB wypisze dokładnie, który przewód albo pin sprawdzić.
+
 ## Kolejność uruchamiania
 
 1. Najpierw sam SIM800L, ogniwo i ESP32: `pio device monitor`, potem `status` i `diag`. Modem ma zgłosić się jako "SIM800 (2G)", a `+CREG: 0,1` oznacza, że jest w sieci.

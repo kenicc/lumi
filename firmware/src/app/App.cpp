@@ -15,6 +15,7 @@
 #include <string>
 
 #include "app/Diag.h"
+#include "app/SelfTest.h"
 #include "app/State.h"
 #include "audio/AudioOut.h"
 #include "core/AtParse.h"
@@ -418,6 +419,12 @@ void shutdown() {
 }
 
 void onKey(Key k, Ev type) {
+  if (selftest::active()) {
+    lastInput = millis();
+    selftest::onKey(k, type);
+    if (!selftest::active()) render();  // koniec testu - zwykły ekran
+    return;
+  }
   bool wasOff = !screenOn;
   lastInput = millis();
 
@@ -542,6 +549,10 @@ void onKey(Key k, Ev type) {
 }
 
 void onWheel(int d) {
+  if (selftest::active()) {
+    selftest::onWheel(d);
+    return;
+  }
   wake();
   if (call.phase == Phase::Active || call.phase == Phase::Outgoing) {
     callVolume = clampv<int>(callVolume + d, 1, 10);
@@ -566,6 +577,7 @@ void onWheel(int d) {
 }
 
 void onIncoming(const char* num) {
+  if (selftest::active()) selftest::stop();  // rozmowa ważniejsza niż test
   int k = C.contactIndexByNumber(num);
   if (C.onlyContacts && k < 0) {
     modem::hangup();
@@ -696,6 +708,12 @@ void tick() {
   if (now - lastTick < 100) return;
   uint32_t dt = now - lastTick;
   lastTick = now;
+  if (selftest::active()) {  // test sprzętu: bez wygaszania ekranu i bez zwykłych ekranów
+    lastInput = now;
+    selftest::tick();
+    if (!selftest::active()) render();
+    return;
+  }
   rem::Queue::Tick rt = reminders.tick(now, call.phase != Phase::None, dt);
 
   if (powerHolding && (C.allowPowerOff || !haveConfig) && now - powerHoldAt > 300)
@@ -852,9 +870,15 @@ void begin() {
   net::begin();
   applyConfig();
   scr = ok ? Screen::Home : Screen::Unpaired;
+  bool startTest = digitalRead(pins::BTN_HOME) == LOW;  // Home przytrzymany przy włączaniu = test sprzętu
   lastInput = millis();
   // zasada 5: użytkownik wie, że coś się zmieniło
   if (ota::updatedThisBoot()) notices.push_back("LUMI ma nową wersję oprogramowania");
+  if (startTest) {
+    render();
+    selftest::start();
+    return;
+  }
   render();
 }
 
@@ -885,6 +909,10 @@ bool idleForUpdate() { return idleFlag; }
 void testMessage(const char* author, const char* text) {
   static int id = 900000;
   inbox.push_back({++id, author, text, (long long)time(nullptr)});
+}
+
+void startSelfTest() {
+  selftest::start();
 }
 
 void testReminder(const char* text) {
