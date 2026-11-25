@@ -39,7 +39,8 @@ pio run -e proto -t upload     # firmware (proto: A7670E + ekran 2,4"; series: E
 pio run -e proto -t uploadfs   # data/: config.json + dźwięki
 pio device monitor             # konsola serwisowa, wpisz: help
 pio test -e native             # testy logiki na komputerze
-sim/build.sh                   # zrzuty ekranów do sim/out (wymaga Pillow)
+sim/build.sh                   # symulator: asercje zachowania + porównanie ekranów ze wzorcami (sim/golden.txt)
+UPDATE_GOLDEN=1 sim/build.sh   # po zamierzonej zmianie wyglądu: zapisz nowe wzorce
 ```
 
 Pierwsze uruchomienie bez konfiguracji prowadzi przez dwa kroki na ekranie: kod QR sieci LUMI (telefon podaje domowe Wi-Fi na stronie 192.168.4.1), potem kod QR parowania z aplikacją rodziny (`../app`). Adres aplikacji: flaga `LUMI_SERVER` w `platformio.ini`, strona 192.168.4.1 albo konsola `server <adres>`.

@@ -50,10 +50,10 @@ jobs:
           key: pio-${{ hashFiles('firmware/platformio.ini') }}
       - run: pip install platformio pillow
       - run: cd firmware && pio pkg install -e proto
-      - run: cd app && npm ci
-      - name: Zrzuty ekranów LUMI
+      - name: Symulator - zachowanie i wzorce ekranów
         run: firmware/sim/build.sh
       - uses: actions/upload-artifact@v4
+        if: always()  # zrzuty przydają się najbardziej, gdy test nie przeszedł
         with:
           name: ekrany-lumi
           path: firmware/sim/out/*.png

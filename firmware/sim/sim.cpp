@@ -10,6 +10,9 @@
 #include "Arduino.h"
 #include "LittleFS.h"
 #include "app/App.h"
+#include "app/SelfTest.h"
+#include "app/State.h"
+#include "ui/Ui.h"
 #include "app/Events.h"
 #include "audio/AudioOut.h"
 #include "hw/Battery.h"
@@ -111,7 +114,11 @@ Cloud cloud() { return cloudSim; }
 const char* cloudName(Cloud) { return ""; }
 void reportSoon() {}
 void startProvisioning() {}
-void queueEvent(const std::string& j) { printf("zdarzenie: %s\n", j.c_str()); }
+static std::vector<std::string> events;  // zdarzenia wysłane "do rodziny"
+void queueEvent(const std::string& j) {
+  printf("zdarzenie: %s\n", j.c_str());
+  events.push_back(j);
+}
 std::string photoPath(const std::string& h) { return "/ph/" + h + ".565"; }
 std::vector<Message> takeMessages() { return {}; }
 wx::Forecast forecast() { return fc; }
@@ -194,6 +201,19 @@ static void run(uint32_t ms) {
   }
 }
 
+// ---------- asercje zachowania ----------
+static int failures = 0;
+static void check(bool ok, const char* what) {
+  if (!ok) {
+    failures++;
+    printf("BLAD: %s\n", what);
+  }
+}
+static bool lastEventHas(const char* s) { return !net::events.empty() && net::events.back().find(s) != std::string::npos; }
+using app::detail::Phase;
+using app::detail::Screen;
+namespace D = app::detail;
+
 static void shot(const char* name) {
   run(300);
   lv_obj_invalidate(lv_screen_active());
@@ -256,6 +276,7 @@ int main() {
   display::begin();
   app::begin();
   shot("00_parowanie_wifi");
+  check(D::scr == Screen::Unpaired, "bez konfiguracji: ekran parowania");
   cloudSim = net::Cloud::Unclaimed;
   bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
   shot("00_parowanie_aplikacja");
@@ -270,11 +291,13 @@ int main() {
   app::reloadConfig(false);
   bus::post(Event(Ev::ModemReady, 1));
   shot("01_ekran_glowny");
+  check(D::scr == Screen::Home, "po konfiguracji: ekran główny");
 
   key(Key::Call);
   shot("02_kontakty");
   key(Key::Bottom);
   shot("03_kontakty_nastepny");
+  check(D::scr == Screen::Contacts && D::contactIdx == 1, "Następny przewija kontakty");
 
   key(Key::Music);
   key(Key::Mid);
@@ -287,19 +310,23 @@ int main() {
   key(Key::Home);
   key(Key::Top);  // szybkie wybieranie
   shot("06_potwierdzenie");
+  check(D::scr == Screen::Confirm, "szybkie wybieranie pyta o potwierdzenie");
   key(Key::Bottom);
 
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48600100200"));
   run(1200);
   shot("07_rozmowa_przychodzaca_auto");
+  check(D::call.phase == Phase::Incoming && D::call.contact == 0 && D::call.autoAt != 0, "Ania dzwoni, auto-odbieranie zaplanowane");
   key(Key::Bottom);  // odrzuć
 
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48601200300"));
   run(500);
   shot("08_rozmowa_przychodzaca");
+  check(!D::missed.has, "odrzucona rozmowa nie jest nieodebrana");
   key(Key::Top);
   run(65000);
   shot("09_rozmowa_trwa");
+  check(D::call.phase == Phase::Active, "po Odbierz rozmowa trwa");
   key(Key::Bottom);
   run(500);
 
@@ -308,6 +335,7 @@ int main() {
   bus::post(Event(Ev::CallEnded, 0));
   run(500);
   shot("10_nieodebrane");
+  check(D::missed.has && !strcmp(D::missed.number, "+48512345678"), "nieodebrana rozmowa zapamiętana");
   key(Key::Bottom);
 
   bus::post(Event(Ev::Wheel, 2));
@@ -324,6 +352,7 @@ int main() {
   app::reloadConfig(true);
   run(500);
   shot("12_komunikat_zmiany");
+  check(ui::noticeVisible(), "zmiana od rodziny pokazuje komunikat");
   key(Key::Top);
 
   // bardzo duży tekst i wysoki kontrast
@@ -384,20 +413,25 @@ int main() {
   app::testReminder("Weź leki na ciśnienie");
   run(500);
   shot("22_przypomnienie");
+  check(D::scr == Screen::Reminder && D::reminders.active(), "przypomnienie na ekranie");
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48601200300"));
   run(500);
   bus::post(Event(Ev::CallEnded, 1));
   run(500);
   shot("23_przypomnienie_po_rozmowie");
+  check(D::scr == Screen::Reminder, "przypomnienie wraca po rozmowie");
   key(Key::Top);
   shot("24_po_potwierdzeniu");
+  check(lastEventHas("\"status\":\"done\"") && !D::reminders.active(), "Zrobione wysyła potwierdzenie do rodziny");
 
   // wiadomość od rodziny
   app::testMessage("Ania", "Przyjadę o 15, nie gotuj obiadu");
   run(500);
   shot("25_wiadomosc");
+  check(D::scr == Screen::Message && D::inbox.size() == 1, "wiadomość na ekranie");
   key(Key::Top);
   shot("26_po_przeczytaniu");
+  check(lastEventHas("\"type\":\"message\"") && D::inbox.empty(), "Dobrze potwierdza przeczytanie");
 
   // test sprzętu krok po kroku
   app::startSelfTest();
@@ -435,5 +469,7 @@ int main() {
   key(Key::Top);
   shot("31_test_bledy");
   key(Key::Home);
-  return 0;
+  check(!selftest::active(), "test sprzętu zakończony");
+  printf("asercje: %s\n", failures ? "BLEDY" : "wszystkie OK");
+  return failures ? 1 : 0;
 }

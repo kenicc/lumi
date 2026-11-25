@@ -1,7 +1,9 @@
 """Zamienia zrzuty PPM na PNG i wkleja je w uproszczony obrys obudowy LUMI (105 x 80 mm),
 żeby było widać, czy etykiety stoją przy przyciskach."""
 import glob
+import hashlib
 import os
+import sys
 
 from PIL import Image, ImageDraw
 
@@ -39,10 +41,31 @@ def device(screen: Image.Image) -> Image.Image:
     return img
 
 
+GOLDEN = os.path.join(os.path.dirname(__file__), "golden.txt")
+hashes = {}
 for p in sorted(glob.glob(os.path.join(OUT, "*.ppm"))):
+    hashes[os.path.basename(p)[:-4]] = hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
     im = Image.open(p).convert("RGB")
     base = p[:-4]
     im.resize((640, 480), Image.NEAREST).save(base + ".png")
     device(im).save(base + "_obudowa.png")
     os.remove(p)
 print("PNG w", OUT)
+
+# Wzorce ekranów: każda zmiana wyglądu musi być zamierzona (UPDATE_GOLDEN=1 sim/build.sh zapisuje nowe)
+if os.environ.get("UPDATE_GOLDEN"):
+    with open(GOLDEN, "w") as f:
+        f.write("# skróty SHA-256 ekranów symulatora; aktualizacja: UPDATE_GOLDEN=1 sim/build.sh\n")
+        for k, v in sorted(hashes.items()):
+            f.write(f"{k} {v}\n")
+    print("zapisano wzorce:", len(hashes))
+    sys.exit(0)
+if not os.path.exists(GOLDEN):
+    print("brak sim/golden.txt - uruchom z UPDATE_GOLDEN=1")
+    sys.exit(1)
+golden = dict(l.split() for l in open(GOLDEN) if l.strip() and not l.startswith("#"))
+diff = sorted(k for k in set(golden) | set(hashes) if golden.get(k) != hashes.get(k))
+if diff:
+    print("EKRANY ZMIENIONE (porównaj z artefaktem / UPDATE_GOLDEN=1, jeśli zamierzone):", ", ".join(diff))
+    sys.exit(1)
+print("ekrany zgodne ze wzorcami:", len(hashes))
