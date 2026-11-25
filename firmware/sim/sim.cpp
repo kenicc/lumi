@@ -129,6 +129,14 @@ void addWifi(const std::string&, const std::string&) {}
 void factoryReset() {}
 }  // namespace identity
 
+namespace diag {
+void error(const char* fmt, ...) { (void)fmt; }
+}  // namespace diag
+namespace ota {
+void markHealthy() {}
+bool updatedThisBoot() { return false; }
+}  // namespace ota
+
 static uint8_t batPct = 76;
 namespace battery {
 void begin() {}
