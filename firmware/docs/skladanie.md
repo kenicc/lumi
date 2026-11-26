@@ -86,10 +86,19 @@ Najlepiej opisz przyciski taśmą albo kawałkiem kartki. Przy teście łatwiej 
 
 1. Zainstaluj [VS Code](https://code.visualstudio.com) i w nim rozszerzenie **PlatformIO IDE**.
 2. Otwórz folder `firmware` z repozytorium. Na dolnym pasku wybierz środowisko **env:allegro**.
-3. Podłącz ESP32 kablem do gniazda opisanego **USB**, nie UART. Przez to gniazdo działa też konsola.
-4. Kliknij **Upload**, potem w menu PlatformIO **Upload Filesystem Image**. To wgrywa dźwięki i przykładową konfigurację.
+3. Podłącz ESP32 kablem do gniazda opisanego **COM** (na niektórych płytkach **UART**). Przez to gniazdo działa wgrywanie i konsola. Windows pokaże je w Menedżerze urządzeń jako "USB-Enhanced-SERIAL CH343 (COMx)" albo "CP210x". Jeśli nie ma go wcale, zainstaluj sterownik CH343 albo CP210x.
+4. Kliknij **Upload**, a potem w menu PlatformIO (allegro → Platform) **Upload Filesystem Image**. Uwaga: nie "Build Filesystem Image", bo ta opcja tylko buduje plik na komputerze. Upload Filesystem Image wgrywa dźwięki i przykładową konfigurację. Monitor musi być wtedy zamknięty, bo zajmuje port.
 5. Jeśli wgrywanie się nie zaczyna: przytrzymaj BOOT, naciśnij i puść RST, puść BOOT, spróbuj ponownie.
-6. Otwórz **Serial Monitor** (115200) i wpisz `help`.
+6. Otwórz **Serial Monitor** (115200) i naciśnij RST. Po kilku sekundach powinna pojawić się linia `[config] wersja 1, kontakty: 4...`, a potem `LUMI allegro gotowe`. Wpisz `help`.
+
+Komunikaty `no matching wifi found!` są normalne, dopóki w `data/config.json` nie ma nazwy i hasła twojej sieci.
+
+**Ekran zostaje czarny albo biały:**
+- Program nie potrzebuje do tego ekranu: jeśli w konsoli jest `LUMI allegro gotowe`, ESP32 działa, a problem leży w połączeniu.
+- Piny ekranu muszą być **przylutowane**. Listwa tylko włożona w otwory nie ma pewnego styku. Ekran wtedy miga na biało przy ruszaniu albo nie reaguje wcale.
+- Biały ekran bez obrazu oznacza, że podświetlenie działa, ale ekran nie dostał poleceń: sprawdź CS, DC, SDA, SCL i RESET, potem naciśnij RST.
+- `lcd test` w konsoli rysuje pasy: od lewej czerwony, zielony, niebieski, biały, czarny.
+- Kolory w negatywie: `lcd inv`. Czerwony z niebieskim zamienione: `lcd bgr`. Obraz do góry nogami: `lcd flip`. Ustawienie zostaje zapamiętane, nie trzeba nic zmieniać w kodzie.
 
 ### A6. Test
 

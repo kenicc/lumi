@@ -10,6 +10,7 @@
 #include "app/Diag.h"
 #include "audio/AudioOut.h"
 #include "hw/Battery.h"
+#include "hw/Display.h"
 #include "hw/Input.h"
 #include "modem/Modem.h"
 #include "net/Identity.h"
@@ -46,7 +47,31 @@ void help() {
       "  remind <tekst>    pokaz przypomnienie teraz (test)\n"
       "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
       "  selftest          test sprzetu krok po kroku (albo Home przytrzymany przy wlaczaniu)\n"
-      "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)");
+      "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)\n"
+      "  lcd test          pasy: czerwony zielony niebieski bialy czarny (od lewej)\n"
+      "  lcd inv|flip|bgr  przelacz: negatyw / obrot o 180 / zamiana czerwony-niebieski\n"
+      "  lcd reset         ustawienia ekranu domyslne");
+}
+
+void lcd(const char* arg) {
+  display::Tweaks t = display::currentTweaks();
+  if (!strcmp(arg, "test")) {
+    display::testPattern();
+    Serial.println("od lewej powinno byc: czerwony, zielony, niebieski, bialy, czarny");
+    Serial.println("negatyw (bialy z prawej strony czarny)? lcd inv; czerwony z niebieskim zamienione? lcd bgr");
+    return;
+  }
+  if (!strcmp(arg, "inv")) t.invert = !t.invert;
+  else if (!strcmp(arg, "flip")) t.flip = !t.flip;
+  else if (!strcmp(arg, "bgr")) t.bgr = !t.bgr;
+  else if (!strcmp(arg, "reset")) t = display::Tweaks{};
+  else if (*arg) {
+    Serial.println("lcd test | inv | flip | bgr | reset");
+    return;
+  }
+  if (*arg) display::setTweaks(t);
+  Serial.printf("ekran: negatyw %s, obrot 180 %s, BGR %s (zapamietane)\n", t.invert ? "tak" : "nie",
+                t.flip ? "tak" : "nie", t.bgr ? "tak" : "nie");
 }
 
 void status() {
@@ -104,6 +129,7 @@ void exec(char* l) {
 
   if (!strcmp(l, "help")) help();
   else if (!strcmp(l, "status")) status();
+  else if (!strcmp(l, "lcd")) lcd(arg);
   else if (!strcmp(l, "diag")) modem::diag();
   else if (!strcmp(l, "at")) modem::raw(arg);
   else if (!strcmp(l, "bridge")) modem::bridge(Serial);

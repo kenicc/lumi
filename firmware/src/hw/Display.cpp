@@ -1,6 +1,7 @@
 #include "hw/Display.h"
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <esp_heap_caps.h>
 
 #define LGFX_USE_V1
@@ -48,11 +49,31 @@ class Lgfx : public lgfx::LGFX_Device {
     panel_.config(p);
     setPanel(&panel_);
   }
+
+  // Poprawki dla konkretnej sztuki ekranu (moduły z Allegro różnią się między partiami)
+  void applyTweaks(const display::Tweaks& t) {
+    auto p = panel_.config();
+    p.invert = t.invert ? !LUMI_PANEL_INVERT : LUMI_PANEL_INVERT;
+    p.rgb_order = t.bgr;
+    panel_.config(p);
+  }
 };
 
 Lgfx tft;
 lv_display_t* disp = nullptr;
 bool on = false;
+display::Tweaks tweaks;
+
+void loadTweaks() {
+  Preferences p;
+  if (!p.begin("lcd", true)) return;  // brak przestrzeni = ustawienia domyślne
+  tweaks.invert = p.getBool("inv", false);
+  tweaks.flip = p.getBool("flip", false);
+  tweaks.bgr = p.getBool("bgr", false);
+  p.end();
+}
+
+int rotation() { return tweaks.flip ? (LUMI_ROTATION + 2) % 4 : LUMI_ROTATION; }
 
 constexpr int BL_CH = 0;
 constexpr int BL_BITS = 8;
@@ -80,9 +101,13 @@ void begin() {
   ledcAttachPin(pins::LCD_BL, BL_CH);
   ledcWrite(BL_CH, 0);
 
+  loadTweaks();
+  tft.applyTweaks(tweaks);
   tft.init();
-  tft.setRotation(LUMI_ROTATION);
+  tft.setRotation(rotation());
   tft.fillScreen(0);
+  Serial.printf("[lcd] ekran %dx%d, obrot %d%s%s\n", tft.width(), tft.height(), rotation(),
+                tweaks.invert ? ", odwrocone kolory" : "", tweaks.bgr ? ", BGR" : "");
 
   lv_init();
   lv_tick_set_cb(tickMs);
@@ -109,5 +134,34 @@ void off() {
 }
 
 bool isOn() { return on; }
+
+Tweaks currentTweaks() { return tweaks; }
+
+void setTweaks(const Tweaks& t) {
+  Preferences p;
+  p.begin("lcd", false);
+  p.putBool("inv", t.invert);
+  p.putBool("flip", t.flip);
+  p.putBool("bgr", t.bgr);
+  p.end();
+  tweaks = t;
+  // od razu na ekranie, bez restartu
+  tft.applyTweaks(t);
+  tft.invertDisplay(t.invert ? !LUMI_PANEL_INVERT : LUMI_PANEL_INVERT);
+  tft.setRotation(rotation());
+  if (disp) lv_obj_invalidate(lv_screen_active());
+}
+
+void testPattern() {
+  // Pasy rysowane prosto przez sterownik, z pominięciem interfejsu: sprawdzenie przewodów i kolorów
+  static const uint16_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_WHITE, TFT_BLACK};
+  const int n = sizeof colors / sizeof colors[0];
+  const int w = tft.width() / n;
+  tft.startWrite();
+  for (int i = 0; i < n; i++) tft.fillRect(i * w, 0, i == n - 1 ? tft.width() - i * w : w, tft.height(), colors[i]);
+  tft.endWrite();
+  ledcWrite(BL_CH, 1u << BL_BITS);
+  on = true;
+}
 
 }  // namespace display
