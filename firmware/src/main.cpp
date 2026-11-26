@@ -38,7 +38,8 @@ void setup() {
   ota::begin();  // przed resztą: jeśli nowa wersja nie wstaje, wróć do poprzedniej
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
   tzset();
-  if (!LittleFS.begin(true)) Serial.println("[fs] LittleFS niedostepny");
+  // Etykieta musi zgadzać się z partitions.csv - domyślnie biblioteka szuka "spiffs" i nie montuje nic
+  if (!LittleFS.begin(true, "/littlefs", 10, "littlefs")) Serial.println("[fs] LittleFS niedostepny");
 
   diag::begin();
   bus::begin();
