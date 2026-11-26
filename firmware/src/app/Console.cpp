@@ -84,6 +84,9 @@ void status() {
                 s.fw);
   Serial.printf("SIM: %s, siec: %s, operator: %s, LTE: %s, zasieg: %d/4\n", s.simOk ? "ok" : "brak",
                 s.registered ? "zarejestrowany" : "brak", s.op, s.lte ? "tak" : "nie", s.bars);
+  if (s.restarts || s.voltageWarnings)
+    Serial.printf("modem: samoczynne restarty %u, ostrzezenia o napieciu %u (sprawdz zasilanie modemu)\n",
+                  s.restarts, s.voltageWarnings);
   Serial.printf("bateria: %u mV, %u%%, ladowanie: %s\n", battery::millivolts(), battery::percent(),
                 battery::charging() ? "tak" : "nie");
   Serial.printf("wifi: %s %s\n", net::wifiConnected() ? "polaczone" : "brak", net::wifiSsid().c_str());

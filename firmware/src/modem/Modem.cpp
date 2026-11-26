@@ -70,9 +70,36 @@ void onRing() {
   wasActive = false;
 }
 
+bool reinitReq = false;  // modem uruchomił się od nowa sam z siebie: trzeba go skonfigurować ponownie
+
+void countStatus(uint16_t Status::*field) {
+  xSemaphoreTake(stMutex, portMAX_DELAY);
+  st.*field += 1;
+  xSemaphoreGive(stMutex);
+}
+
 // Zwraca true, gdy linia była komunikatem niezamówionym (URC) i została obsłużona.
 bool handleUrc(const char* l) {
   char num[24];
+  // SIM800 sam ostrzega o napięciu (pisownia "WARNNING" jest oryginalna). Na płytce stykowej to prawie
+  // zawsze cienkie, długie przewody do VCC albo rozładowane ogniwo - podpowiedź trafia do diagnostyki.
+  if (!strncmp(l, "UNDER-VOLTAGE", 13) || !strncmp(l, "OVER-VOLTAGE", 12)) {
+    countStatus(&Status::voltageWarnings);
+    diag::error(l[0] == 'U' ? "[modem] za niskie napiecie: naladuj ogniwo, krotsze grubsze przewody VCC/GND"
+                            : "[modem] za wysokie napiecie: VCC modemu max 4,4 V, nigdy 5 V");
+    if (strstr(l, "POWER DOWN")) reinitReq = true;
+    return true;
+  }
+  // "RDY" wysyła modem tuż po włączeniu. Jeśli przychodzi, gdy już działał, to znaczy, że sam się
+  // zrestartował (spadek napięcia przy nadawaniu) i zapomniał ustawień, np. numeru dzwoniącego (CLIP).
+  if (!strcmp(l, "RDY") || !strcmp(l, "NORMAL POWER DOWN")) {
+    if (st.ready) {
+      countStatus(&Status::restarts);
+      diag::error("[modem] sam sie zrestartowal - za slabe zasilanie? kondensator 1000uF tuz przy VCC");
+      reinitReq = true;
+    }
+    return true;
+  }
   if (!strcmp(l, "RING") || !strncmp(l, "+CRING:", 7)) {
     onRing();
     return true;
@@ -99,7 +126,7 @@ bool handleUrc(const char* l) {
     return true;
   }
   // komunikaty startowe i SMS - niepotrzebne w wersji podstawowej
-  static const char* const kIgnore[] = {"RDY", "PB DONE", "SMS DONE", "+QIND", "*ATREADY", "+CMTI", "+CGEV"};
+  static const char* const kIgnore[] = {"PB DONE", "SMS DONE", "+QIND", "*ATREADY", "+CMTI", "+CGEV"};
   for (const char* p : kIgnore)
     if (!strncmp(l, p, strlen(p))) return true;
   return false;
@@ -269,6 +296,12 @@ bool startup() {
   static const char* const kLte[] = {"AT+CEREG=0", "AT+CTZU=1"};
   static const char* const kSim800[] = {"AT+CLTS=1", "AT+CALM=0", "AT+CSCLK=0"};
   if (v == Vendor::Sim800) {
+    // Stała prędkość zamiast automatycznej: modem wysyła wtedy "RDY" po każdym uruchomieniu,
+    // więc widzimy jego samoczynne restarty (patrz handleUrc). Zapis do pamięci modemu tylko raz.
+    if (cmd("AT+IPR?", 1000, r, sizeof r) == Res::Ok && !strstr(r, "115200")) {
+      cmd("AT+IPR=115200");
+      cmd("AT&W", 2000);
+    }
     for (const char* c : kSim800)
       if (cmd(c) != Res::Ok) Serial.printf("[modem] %s nie przeszlo\n", c);
   } else {
@@ -420,6 +453,17 @@ void task(void*) {
       continue;
     }
     if (readLine(20)) handleUrc(line);
+    if (reinitReq) {
+      reinitReq = false;
+      if (cs != CallState::Idle) onEnded();
+      setStatus([](Status& s) { s.ready = false; });
+      bus::post(Event(Ev::ModemFail));
+      vTaskDelay(pdMS_TO_TICKS(2000));  // modem kończy start (SIM, sieć)
+      while (!startup()) vTaskDelay(pdMS_TO_TICKS(30000));
+      silentPolls = 0;
+      lastNet = millis();
+      continue;
+    }
 
     Cmd c;
     while (xQueueReceive(cmdQ, &c, 0) == pdTRUE) handle(c);
