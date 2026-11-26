@@ -73,7 +73,8 @@ void setServer(const std::string& url) {
 
 std::vector<cfg::Wifi> wifi() {
   xSemaphoreTake(mtx, portMAX_DELAY);
-  String s = p.getString("wifi", "[]");
+  // isKey: brak zapisanych sieci to stan normalny, a getString zapisywałby wtedy błąd w konsoli co kilka sekund
+  String s = p.isKey("wifi") ? p.getString("wifi", "[]") : String("[]");
   xSemaphoreGive(mtx);
   std::vector<cfg::Wifi> out;
   JsonDocument d;
