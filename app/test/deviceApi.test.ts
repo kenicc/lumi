@@ -58,6 +58,13 @@ describe("API urządzenia", () => {
     expect((await r.json()).version).toBe(1);
     r = await config(get("/api/device/config", headers(SECRET, 1)));
     expect(r.status).toBe(304);
+    expect(r.headers.get("X-Lumi-Inbox")).toBe("0");
+    // nowa wiadomość: 304 dalej, ale nagłówek mówi urządzeniu, że warto zapytać o wiadomości
+    db.tables.messages.push({ id: 7, device_id: ID, author: "Ania", text: "Hej", created_at: new Date().toISOString(), read_at: null });
+    db.tables.messages.push({ id: 9, device_id: "LUMI-FFFFFF", author: "X", text: "cudza", created_at: new Date().toISOString(), read_at: null });
+    r = await config(get("/api/device/config", headers(SECRET, 1)));
+    expect(r.status).toBe(304);
+    expect(r.headers.get("X-Lumi-Inbox")).toBe("7");
 
     r = await status(post("/api/device/status", { version: 1, battery: 76, signal: 3, registered: true, lte: false, modem: "SIM800 (2G)", operator: "Orange", sim: true, charging: false, batteryMv: 3950, wifiRssi: -60, uptime: 120, variant: "allegro", fw: "Nov 24 2026" }));
     expect(r.status).toBe(200);

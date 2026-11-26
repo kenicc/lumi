@@ -861,6 +861,8 @@ void begin() {
   ui::begin();
   bool ok = loadConfig();
   if (!ok) Serial.println("[config] brak konfiguracji - ekran parowania");
+  else Serial.printf("[config] wersja %d, kontakty: %u, radio i muzyka: %u, sieci Wi-Fi: %u\n", C.version,
+                     (unsigned)C.contacts.size(), (unsigned)C.mediaList.size(), (unsigned)C.wifi.size());
   volume = C.startVolume;
 
   if (prefs.isKey("mNum")) {

@@ -38,7 +38,12 @@ void setup() {
   ota::begin();  // przed resztą: jeśli nowa wersja nie wstaje, wróć do poprzedniej
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
   tzset();
-  if (!LittleFS.begin(true)) Serial.println("[fs] LittleFS niedostepny");
+  // Etykieta musi zgadzać się z partitions.csv - domyślnie biblioteka szuka "spiffs" i nie montuje nic
+  // Bez formatowania na ślepo: jeśli montowanie zawiedzie, powiedz o tym, zanim pamięć zostanie wyczyszczona
+  if (!LittleFS.begin(false, "/littlefs", 10, "littlefs")) {
+    Serial.println("[fs] pamiec ustawien pusta lub uszkodzona - formatuje (wgraj ustawienia: Upload Filesystem Image)");
+    if (!LittleFS.begin(true, "/littlefs", 10, "littlefs")) Serial.println("[fs] LittleFS niedostepny");
+  }
 
   diag::begin();
   bus::begin();

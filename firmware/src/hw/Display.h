@@ -13,4 +13,15 @@ void setBacklight(uint8_t percent, bool steady);
 void off();
 bool isOn();
 
+// Poprawki dla konkretnej sztuki ekranu, zapamiętane w pamięci urządzenia (konsola: lcd)
+struct Tweaks {
+  bool invert = false;  // negatyw -> normalne kolory
+  bool flip = false;    // obraz do góry nogami -> obrót o 180 stopni
+  bool bgr = false;     // czerwony i niebieski zamienione
+};
+Tweaks currentTweaks();
+void setTweaks(const Tweaks& t);
+// Pasy: czerwony, zielony, niebieski, biały, czarny (od lewej). Znikają przy następnym odświeżeniu ekranu.
+void testPattern();
+
 }  // namespace display

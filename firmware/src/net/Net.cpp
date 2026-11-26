@@ -54,6 +54,20 @@ uint32_t lastWeather = 0, lastSync = 0, lastReport = 0, connectingSince = 0;
 constexpr uint32_t WEATHER_EVERY_MS = 30UL * 60 * 1000;
 constexpr uint32_t REPORT_EVERY_MS = 5UL * 60 * 1000;
 constexpr uint32_t PROVISION_AFTER_MS = 90UL * 1000;  // nieskonfigurowane i nie może się połączyć
+
+// Brak znanej sieci (senior wyszedł z domu, router wyłączony): nie skanuj bez przerwy. Każde skanowanie
+// to kilka sekund pracy radia, a radio Wi-Fi to największy pobór prądu po ekranie. Kolejne próby co
+// 15 s, 30 s, 1 min... do 5 min, radio wyłączone pomiędzy. Po powrocie do domu połączy się najpóźniej po 5 min.
+uint8_t wifiFails = 0;
+uint32_t wifiRetryAt = 0;
+constexpr uint8_t WIFI_QUICK_TRIES = 3;
+constexpr uint32_t WIFI_BACKOFF_MAX_MS = 5UL * 60 * 1000;
+
+uint32_t wifiBackoffMs(uint8_t fails) {
+  if (fails <= WIFI_QUICK_TRIES) return 0;
+  uint32_t ms = 15000UL << min<uint8_t>(fails - WIFI_QUICK_TRIES - 1, 5);
+  return ms > WIFI_BACKOFF_MAX_MS ? WIFI_BACKOFF_MAX_MS : ms;
+}
 constexpr uint32_t PROVISION_WINDOW_MS = 5UL * 60 * 1000;
 constexpr const char* TZ_PL = "CET-1CEST,M3.5.0,M10.5.0/3";
 
@@ -195,24 +209,42 @@ void stopAp() {
 struct Resp {
   int code = -1;
   String body;
+  long inbox = -1;  // X-Lumi-Inbox: id najnowszej nieprzeczytanej wiadomości (0 = brak), -1 = serwer nie podał
 };
 
-Resp request(const char* method, const char* path, const String& body, int version) {
+// Wiadomości pobieramy tylko, gdy serwer zgłasza nowszą niż ostatnio widziana (starszy serwer: zawsze)
+long inboxTop = -1;
+long newestSeen = 0;
+
+// Jedno połączenie HTTPS na cały cykl synchronizacji (konfiguracja, wiadomości, zdarzenia, status idą
+// jedno po drugim). Uzgadnianie TLS to ~1 s pracy procesora i radia - bez tego robiliśmy je 2-4 razy
+// co 20 s. Po cyklu połączenie jest zamykane (closeConnection), żeby nie trzymać ~40 KB pamięci TLS
+// w bezczynności i nie liczyć na to, jak długo serwer trzyma bezczynne połączenie.
+WiFiClientSecure tls;
+HTTPClient http;
+bool tlsReady = false;
+
+void closeConnection() {
+  if (!tlsReady) return;
+  http.end();
+  tls.stop();
+}
+
+Resp requestOnce(const char* method, const std::string& url, const String& body, int version) {
   Resp r;
-  std::string base = identity::server();
-  if (base.empty()) return r;
-  std::string url = base + path;
   bool https = url.rfind("https://", 0) == 0;
-  WiFiClientSecure secure;
-  WiFiClient plain;
-  HTTPClient http;
   http.setTimeout(10000);
-  http.setReuse(false);
+  http.setReuse(true);
   if (https) {
-    secure.setCACertBundle(lumi_ca_bundle);  // weryfikacja certyfikatu serwera
-    if (!http.begin(secure, url.c_str())) return r;
+    if (!tlsReady) {
+      tls.setCACertBundle(lumi_ca_bundle);  // weryfikacja certyfikatu serwera
+      tlsReady = true;
+    }
+    if (!http.begin(tls, url.c_str())) return r;
   } else {
 #ifdef LUMI_ALLOW_HTTP
+    static WiFiClient plain;
+    tlsReady = true;  // closeConnection zamknie też zwykłe połączenie
     if (!http.begin(plain, url.c_str())) return r;
 #else
     Serial.println("[serwer] tylko HTTPS (LUMI_ALLOW_HTTP pozwala na HTTP do testow w sieci domowej)");
@@ -223,9 +255,25 @@ Resp request(const char* method, const char* path, const String& body, int versi
   http.addHeader("X-Lumi-Device", identity::id());
   http.addHeader("X-Lumi-Version", String(version));
   http.addHeader("Content-Type", "application/json");
+  static const char* kCollect[] = {"X-Lumi-Inbox"};
+  http.collectHeaders(kCollect, 1);
   r.code = strcmp(method, "GET") == 0 ? http.GET() : http.POST(body);
   if (r.code > 0) r.body = http.getString();
-  http.end();
+  if (http.hasHeader("X-Lumi-Inbox")) r.inbox = http.header("X-Lumi-Inbox").toInt();
+  http.end();  // przy setReuse połączenie zostaje otwarte, jeśli serwer na to pozwala
+  return r;
+}
+
+Resp request(const char* method, const char* path, const String& body, int version) {
+  std::string base = identity::server();
+  if (base.empty()) return Resp{};
+  std::string url = base + path;
+  Resp r = requestOnce(method, url, body, version);
+  if (r.code < 0) {
+    // serwer mógł zamknąć połączenie, które próbowaliśmy użyć ponownie: jeszcze raz, od nowa
+    closeConnection();
+    r = requestOnce(method, url, body, version);
+  }
   return r;
 }
 
@@ -256,6 +304,7 @@ void hello(const Settings& s) {
 
 void syncConfig(const Settings& s) {
   Resp r = request("GET", "/api/device/config", "", s.version);
+  if (r.code > 0) inboxTop = r.inbox;
   if (r.code == 304) {
     setCloud(Cloud::Ok);
     return;
@@ -386,6 +435,7 @@ void fetchMessages(const Settings& s) {
     int id = o["id"] | 0;
     if (!id || seenMessages.count(id)) continue;
     seenMessages.insert(id);
+    if (id > newestSeen) newestSeen = id;
     inbox.push_back({id, o["author"] | "", o["text"] | "", o["at"] | 0LL});
     any = true;
   }
@@ -527,7 +577,11 @@ void task(void*) {
     bool dirty = cfgDirty;
     cfgDirty = false;
     xSemaphoreGive(mtx);
-    if (dirty) rebuildWifi(s);
+    if (dirty) {
+      rebuildWifi(s);
+      wifiFails = 0;  // nowa sieć od rodziny: próbuj od razu
+      wifiRetryAt = 0;
+    }
 
     std::vector<cfg::Wifi> nets = allNetworks(s);
     bool unconfigured = s.version == 0;
@@ -547,16 +601,32 @@ void task(void*) {
       }
       continue;
     }
+    if (wifiRetryAt && (int32_t)(millis() - wifiRetryAt) < 0) continue;  // przerwa między próbami
+    wifiRetryAt = 0;
     if (wifiOff) {
       WiFi.mode(WIFI_STA);
       wifiOff = false;
-      connectingSince = millis();
+      if (unconfigured) connectingSince = millis();
     }
     if (multi->run(5000) != WL_CONNECTED) {
       setCloud(Cloud::Connecting);
-      if (unconfigured && millis() - connectingSince > PROVISION_AFTER_MS) startAp();  // np. złe hasło
+      if (unconfigured) {
+        if (millis() - connectingSince > PROVISION_AFTER_MS) startAp();  // np. złe hasło
+        continue;
+      }
+      if (wifiFails < 255) wifiFails++;
+      uint32_t wait = wifiBackoffMs(wifiFails);
+      if (wait) {
+        if (wifiFails == WIFI_QUICK_TRIES + 1) Serial.println("[wifi] brak znanej sieci - kolejne proby coraz rzadziej");
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        wifiOff = true;
+        wifiRetryAt = millis() + wait;
+      }
       continue;
     }
+    if (wifiFails > WIFI_QUICK_TRIES) Serial.printf("[wifi] polaczono z %s\n", WiFi.SSID().c_str());
+    wifiFails = 0;
     connectingSince = millis();
 
     if (!ntpStarted) {
@@ -583,7 +653,7 @@ void task(void*) {
       if (helloDone && (!lastSync || now - lastSync > every)) {
         lastSync = now;
         syncConfig(s);
-        msgDue = true;
+        msgDue = inboxTop < 0 || inboxTop > newestSeen;
       }
       if (helloDone && cloudState == Cloud::Ok && (reportReq || now - lastReport > REPORT_EVERY_MS)) {
         reportReq = false;
@@ -603,6 +673,7 @@ void task(void*) {
       lastWeather = now;
       fetchWeather(s);
     }
+    closeConnection();
   }
 }
 

@@ -26,6 +26,8 @@ struct Status {
   bool lte = false;
   char op[20] = {0};
   int batteryMv = 0;  // SIM800: napięcie akumulatora z AT+CBC
+  uint16_t restarts = 0;       // modem sam się zrestartował (zwykle za słabe zasilanie przy nadawaniu)
+  uint16_t voltageWarnings = 0;  // SIM800: UNDER-/OVER-VOLTAGE od modemu
 };
 
 void begin();  // uruchamia zadanie modemu na rdzeniu 1
