@@ -6,20 +6,21 @@ import { batteryText, isOnline, signalText } from "@/lib/status";
 import { currentSettings } from "@/lib/store";
 import { ROLE_NAMES } from "@/lib/types";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { Icon, type IconName } from "@/components/Icon";
 import { Flash, Top, ago, plural, type SP } from "@/components/ui";
 
-const SECTIONS: { href: string; ico: string; title: string; desc: string; section: Section }[] = [
-  { href: "kontakty", ico: "📞", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
-  { href: "zaproponuj", ico: "➕", title: "Zaproponuj kontakt", desc: "opiekun zdecyduje, czy dodać", section: "propose" },
-  { href: "ekran", ico: "🏠", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
-  { href: "wiadomosci", ico: "💬", title: "Wiadomości", desc: "krótki tekst na ekran LUMI", section: "messages" },
-  { href: "przypomnienia", ico: "⏰", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
-  { href: "radio", ico: "📻", title: "Radio i muzyka", desc: "stacje FM, internetowe, piosenki", section: "media" },
-  { href: "wyglad", ico: "🔆", title: "Wygląd i dźwięk", desc: "wielkość tekstu, głośność, cisza nocna", section: "look" },
-  { href: "pogoda", ico: "⛅", title: "Pogoda", desc: "miejscowość", section: "weather" },
-  { href: "dostepnosc", ico: "♿", title: "Dostępność", desc: "auto-odbieranie, drżenie dłoni, blokady", section: "access" },
-  { href: "wifi", ico: "📶", title: "Wi-Fi", desc: "sieci, z którymi łączy się LUMI", section: "wifi" },
-  { href: "osoby", ico: "👥", title: "Osoby", desc: "kto ma dostęp do ustawień", section: "people" },
+const SECTIONS: { href: string; ico: IconName; title: string; desc: string; section: Section }[] = [
+  { href: "kontakty", ico: "phone", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
+  { href: "zaproponuj", ico: "plus", title: "Zaproponuj kontakt", desc: "opiekun zdecyduje, czy dodać", section: "propose" },
+  { href: "ekran", ico: "home", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
+  { href: "wiadomosci", ico: "message", title: "Wiadomości", desc: "krótki tekst na ekran LUMI", section: "messages" },
+  { href: "przypomnienia", ico: "alarm", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
+  { href: "radio", ico: "radio", title: "Radio i muzyka", desc: "stacje FM, internetowe, piosenki", section: "media" },
+  { href: "wyglad", ico: "sun", title: "Wygląd i dźwięk", desc: "wielkość tekstu, głośność, cisza nocna", section: "look" },
+  { href: "pogoda", ico: "cloud", title: "Pogoda", desc: "miejscowość", section: "weather" },
+  { href: "dostepnosc", ico: "access", title: "Dostępność", desc: "auto-odbieranie, drżenie dłoni, blokady", section: "access" },
+  { href: "wifi", ico: "wifi", title: "Wi-Fi", desc: "sieci, z którymi łączy się LUMI", section: "wifi" },
+  { href: "osoby", ico: "users", title: "Osoby", desc: "kto ma dostęp do ustawień", section: "people" },
 ];
 
 const STATE: Record<DayState, { text: string; cls: string }> = {
@@ -105,7 +106,7 @@ export default async function Device({ params, searchParams }: { params: Promise
         {SECTIONS.filter((s) => can(role, s.section)).map((s) => (
           <li key={s.href}>
             <Link href={`/d/${id}/${s.href}`}>
-              <span className="ico" aria-hidden>{s.ico}</span>
+              <span className="ico" aria-hidden><Icon name={s.ico} /></span>
               <span>
                 <b>{s.title}</b>
                 {s.section === "contacts" && (pendingProposals ?? 0) > 0 && <span className="badge"> {pendingProposals} {plural(pendingProposals!, "nowa propozycja", "nowe propozycje", "nowych propozycji")}</span>}

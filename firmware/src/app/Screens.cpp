@@ -331,7 +331,7 @@ void renderMedia() {
   if (st) ui::label(col, F.body, sc, st);
 
   bool many = C.mediaList.size() > 1;
-  if (many) ui::setRail(0, IC_UP, "Poprzednia", ui::Tone::Neutral);
+  if (many) ui::setRail(0, IC_UP, "Wcześniej", ui::Tone::Neutral);
   else ui::hideRail(0);
   if (playing || (current && as.connecting)) ui::setRail(1, IC_PAUSE, "Pauza", ui::Tone::Accent);
   else ui::setRail(1, IC_PLAY, "Graj", ui::Tone::Accent);

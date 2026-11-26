@@ -33,20 +33,20 @@ export default async function HomeScreen({ params, searchParams }: { params: Pro
       </p>
       <Flash ok={ok} err={err} />
       {/* podgląd: tak to wygląda na LUMI */}
-      <div className="card" style={{ background: "#0f1113", color: "#f5f2ea", display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+      <div className="card" style={{ background: "#0b0b0d", color: "#f4f1ea", border: 0, display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
         <div>
-          <div style={{ fontSize: 44, fontWeight: 700, lineHeight: 1 }}>10:24</div>
+          <div style={{ fontSize: 46, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>10:24</div>
           <div style={{ fontWeight: 700 }}>Wtorek</div>
-          {s.home.partOfDay && <div style={{ color: "#ffb547" }}>rano</div>}
-          <div style={{ color: "#bdb8ad" }}>24 listopada</div>
+          {s.home.partOfDay && <div style={{ color: "#f2b04b" }}>rano</div>}
+          <div style={{ color: "#a39e94" }}>24 listopada</div>
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           {s.home.slots.map((slot, i) => (
             <div
               key={i}
               style={{
-                borderRadius: 10, padding: "8px 6px", textAlign: "center", fontWeight: 700, minHeight: 40,
-                background: slot.startsWith("contact:") ? "#1e6b46" : slot ? "#262a30" : "transparent",
+                borderRadius: 12, padding: "8px 6px", textAlign: "center", fontWeight: 700, minHeight: 40,
+                background: slot.startsWith("contact:") ? "#1d7350" : slot ? "#1c1d21" : "transparent",
               }}
             >
               {label(slot)}
