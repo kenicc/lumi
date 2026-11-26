@@ -402,10 +402,13 @@ void task(void*) {
   digitalWrite(pins::MODEM_DTR, LOW);  // DTR nisko = modem nie śpi
   pinMode(pins::MODEM_RI, INPUT_PULLUP);
 
-  while (!startup()) {
-    diag::error("[modem] start nieudany, ponowie za 30 s");
-    bus::post(Event(Ev::ModemFail));
-    vTaskDelay(pdMS_TO_TICKS(30000));
+  // Bez modemu (np. etap A prototypu albo odłączona antena/zasilanie): próbuj dalej, ale nie zapychaj
+  // dziennika błędów, który rodzina widzi w diagnostyce - wpis przy pierwszej i co dziesiątej porażce.
+  // Po 10 próbach co 2 min zamiast co 30 s (każda próba to impuls PWRKEY i 20 s nasłuchu).
+  for (uint32_t fails = 1; !startup(); fails++) {
+    if (fails == 1 || fails % 10 == 0) diag::error("[modem] start nieudany (proba %lu)", (unsigned long)fails);
+    if (fails == 1) bus::post(Event(Ev::ModemFail));
+    vTaskDelay(pdMS_TO_TICKS(fails < 10 ? 30000 : 120000));
   }
   pollNetwork();
 

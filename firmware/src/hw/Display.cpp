@@ -81,14 +81,29 @@ constexpr int BL_FREQ = 25000;  // powyżej pasma słyszalnego
 
 constexpr int BUF_LINES = 40;
 
-void flush(lv_display_t* d, const lv_area_t* a, uint8_t* px) {
+// Przesyłanie przez DMA w tle: gdy jeden bufor leci do ekranu, LVGL rysuje następny kawałek w drugim.
+// Pełne przerysowanie ekranu jest wtedy wyraźnie krótsze, a procesor nie czeka bezczynnie na SPI.
+bool dmaPending = false;
+
+void finishDma() {
+  if (!dmaPending) return;
+  tft.waitDMA();
+  tft.endWrite();
+  dmaPending = false;
+}
+
+void flush(lv_display_t*, const lv_area_t* a, uint8_t* px) {
   uint32_t w = lv_area_get_width(a), h = lv_area_get_height(a);
+  finishDma();
+  lv_draw_sw_rgb565_swap(px, w * h);  // ekran oczekuje starszego bajtu najpierw; zamiana w miejscu, przed DMA
   tft.startWrite();
   tft.setAddrWindow(a->x1, a->y1, w, h);
-  tft.writePixels(reinterpret_cast<uint16_t*>(px), w * h, true);
-  tft.endWrite();
-  lv_display_flush_ready(d);
+  tft.writePixelsDMA(reinterpret_cast<uint16_t*>(px), w * h, false);
+  dmaPending = true;
 }
+
+// LVGL woła to przed ponownym użyciem bufora; zamiast lv_display_flush_ready
+void flushWait(lv_display_t*) { finishDma(); }
 
 uint32_t tickMs() { return millis(); }
 
@@ -113,6 +128,7 @@ void begin() {
   lv_tick_set_cb(tickMs);
   disp = lv_display_create(board::SCREEN_W, board::SCREEN_H);
   lv_display_set_flush_cb(disp, flush);
+  lv_display_set_flush_wait_cb(disp, flushWait);
   const size_t bytes = board::SCREEN_W * BUF_LINES * 2;
   void* b1 = heap_caps_malloc(bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   void* b2 = heap_caps_malloc(bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
@@ -138,6 +154,7 @@ bool isOn() { return on; }
 Tweaks currentTweaks() { return tweaks; }
 
 void setTweaks(const Tweaks& t) {
+  finishDma();
   Preferences p;
   p.begin("lcd", false);
   p.putBool("inv", t.invert);
@@ -157,6 +174,7 @@ void testPattern() {
   static const uint16_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_WHITE, TFT_BLACK};
   const int n = sizeof colors / sizeof colors[0];
   const int w = tft.width() / n;
+  finishDma();
   tft.startWrite();
   for (int i = 0; i < n; i++) tft.fillRect(i * w, 0, i == n - 1 ? tft.width() - i * w : w, tft.height(), colors[i]);
   tft.endWrite();
