@@ -9,9 +9,9 @@
 #include <deque>
 #include <string>
 
-#include "core/Config.h"
-#include "core/ReminderQueue.h"
-#include "net/Net.h"
+#include "../core/Config.h"
+#include "../core/ReminderQueue.h"
+#include "../net/Net.h"
 
 namespace app {
 namespace detail {

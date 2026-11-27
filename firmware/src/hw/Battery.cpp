@@ -1,9 +1,9 @@
-#include "hw/Battery.h"
+#include "Battery.h"
 
 #include <Arduino.h>
 
-#include "hw/Board.h"
-#include "modem/Modem.h"
+#include "Board.h"
+#include "../modem/Modem.h"
 
 namespace battery {
 

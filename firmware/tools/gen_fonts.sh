@@ -3,7 +3,9 @@
 # Krój: Atkinson Hyperlegible (Braille Institute) - zaprojektowany dla osób słabowidzących,
 # wyraźnie odróżnia I/l/1, O/0, b/d. Ikony: FontAwesome 5 z paczki LVGL.
 # Użycie: tools/gen_fonts.sh <katalog_node_modules> <plik_FontAwesome.woff>
-#   npm i lv_font_conv @fontsource/atkinson-hyperlegible
+#   npm i lv_font_conv @fontsource/atkinson-hyperlegible @fontsource/inter@5.1.0
+# Cyfry zegara i temperatury: Inter 600 - spokojniejsze, bez przekreślonego zera (przy samych
+# cyfrach nie ma ryzyka pomylenia 0 z O, a duży zegar wygląda wtedy elegancko).
 set -euo pipefail
 NM=${1:?node_modules}
 FA=${2:?FontAwesome5 woff}
@@ -26,7 +28,7 @@ gen() { # nazwa rozmiar waga zakres_ikon
 gen_digits() { # duże cyfry zegara i temperatury
   local name=$1 size=$2
   $CONV --bpp 4 --size "$size" --no-compress --format lvgl --lv-include lvgl.h -o "$OUT/$name.c" \
-    --font "$F/atkinson-hyperlegible-latin-700-normal.woff" -r "0x20,0x2D,0x30-0x3A,0xB0"
+    --font "$NM/@fontsource/inter/files/inter-latin-600-normal.woff" -r "0x20,0x2D,0x30-0x3A,0xB0"
 }
 for s in 20 24 28 36 48; do gen "lumi_b$s" $s 700 "$ICONS"; done
 for s in 20 24 28; do gen "lumi_r$s" $s 400 ""; done

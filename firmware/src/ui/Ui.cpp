@@ -1,9 +1,9 @@
-#include "ui/Ui.h"
+#include "Ui.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#include "ui/Icons.h"
+#include "Icons.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_b24);
@@ -68,7 +68,8 @@ lv_obj_t* panel(lv_obj_t* parent) {
 }
 
 void styleSlot(Slot& s) {
-  lv_color_t fill = P.surface, fg = P.text, icon = P.accent;
+  // neutralne przyciski: ikona w kolorze tekstu - akcent tylko tam, gdzie coś wyróżniamy
+  lv_color_t fill = P.surface, fg = P.text, icon = P.highContrast ? P.accent : P.text;
   if (s.tone == Tone::Yes) {
     fill = P.yesFill;
     icon = P.highContrast ? P.yes : P.text;
@@ -79,14 +80,14 @@ void styleSlot(Slot& s) {
     icon = P.accent;
   }
   lv_obj_set_style_bg_color(s.box, fill, 0);
-  lv_obj_set_style_bg_color(s.box, lv_color_lighten(fill, 80), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(s.box, lv_color_lighten(fill, 60), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(s.box, LV_OPA_COVER, 0);
   lv_color_t border = s.tone == Tone::Yes ? P.yes : s.tone == Tone::No ? P.no : P.text;
   lv_obj_set_style_border_width(s.box, P.highContrast ? 3 : 0, 0);
   lv_obj_set_style_border_color(s.box, border, 0);
   lv_obj_set_style_text_color(s.text, fg, 0);
   lv_obj_set_style_text_color(s.icon, icon, 0);
-  lv_obj_set_style_bg_color(s.mark, fg, 0);
+  lv_obj_set_style_bg_color(s.mark, P.highContrast ? fg : P.dim, 0);
   lv_obj_set_style_outline_color(s.box, P.accent, 0);
 }
 
@@ -94,7 +95,7 @@ void styleSlot(Slot& s) {
 const lv_font_t* railFont(const char* text) {
   static const lv_font_t* const order[] = {&lumi_b24, &lumi_b20};
   for (const lv_font_t* f : order)
-    if (fits(text, f, RAIL_W - 14)) return f;
+    if (fits(text, f, RAIL_W - 10)) return f;
   return &lumi_b20;
 }
 
@@ -132,16 +133,17 @@ void setTheme(uint8_t size, bool hc) {
     P.yesFill = lv_color_hex(0x000000);
     P.noFill = lv_color_hex(0x000000);
   } else {
-    // "Grafit": ciepła biel na grafitowym tle, bursztynowy akcent
-    P.bg = lv_color_hex(0x0F1113);
-    P.surface = lv_color_hex(0x262A30);
-    P.text = lv_color_hex(0xF5F2EA);
-    P.dim = lv_color_hex(0xBDB8AD);
-    P.accent = lv_color_hex(0xFFB547);
-    P.yes = lv_color_hex(0x4CC38A);
-    P.no = lv_color_hex(0xFF6B5E);
-    P.yesFill = lv_color_hex(0x1E6B46);
-    P.noFill = lv_color_hex(0xA3302A);
+    // "Grafit": głęboka czerń, ciepła biel, jeden bursztynowy akcent. Kolor niesie znaczenie:
+    // zielony = rozmowa, czerwony = rozłącz, bursztyn = to, na co teraz patrzeć. Reszta spokojna.
+    P.bg = lv_color_hex(0x0B0B0D);
+    P.surface = lv_color_hex(0x1C1D21);
+    P.text = lv_color_hex(0xF4F1EA);
+    P.dim = lv_color_hex(0xA39E94);  // kontrast 7:1 na tle - czytelne także dla słabszego wzroku
+    P.accent = lv_color_hex(0xF2B04B);
+    P.yes = lv_color_hex(0x45C08A);
+    P.no = lv_color_hex(0xF2685B);
+    P.yesFill = lv_color_hex(0x1D7350);
+    P.noFill = lv_color_hex(0x9E2F28);
   }
   switch (size) {
     case 0:
@@ -180,7 +182,7 @@ void begin() {
     // wysunięta poza prawą krawędź, żeby prawe narożniki były proste - "wskazuje" przycisk
     lv_obj_set_size(s.box, RAIL_W + 12, RAIL_H);
     lv_obj_set_pos(s.box, 320 - RAIL_W, RAIL_Y[i] - RAIL_H / 2);
-    lv_obj_set_style_radius(s.box, 14, 0);
+    lv_obj_set_style_radius(s.box, 18, 0);
     lv_obj_set_style_pad_all(s.box, 0, 0);
     lv_obj_set_style_outline_pad(s.box, 2, 0);
 
@@ -190,7 +192,7 @@ void begin() {
 
     s.text = lv_label_create(s.box);
     lv_label_set_long_mode(s.text, LV_LABEL_LONG_DOT);  // za długie imię kończy się "..."
-    lv_obj_set_width(s.text, RAIL_W - 12);
+    lv_obj_set_width(s.text, RAIL_W - 8);
     lv_obj_set_style_text_align(s.text, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s.text, LV_ALIGN_BOTTOM_MID, -6, -4);
 

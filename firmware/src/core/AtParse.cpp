@@ -1,4 +1,4 @@
-#include "core/AtParse.h"
+#include "AtParse.h"
 
 #include <ctype.h>
 #include <stdio.h>

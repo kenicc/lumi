@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "core/Config.h"
+#include "../core/Config.h"
 
 namespace identity {
 

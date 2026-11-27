@@ -1,16 +1,17 @@
-#include "app/SelfTest.h"
+#include "../BuildConfig.h"
+#include "SelfTest.h"
 
 #include <Arduino.h>
 
 #include <string>
 
-#include "audio/AudioOut.h"
-#include "hw/Battery.h"
-#include "hw/Board.h"
-#include "modem/Modem.h"
-#include "net/Net.h"
-#include "ui/Icons.h"
-#include "ui/Ui.h"
+#include "../audio/AudioOut.h"
+#include "../hw/Battery.h"
+#include "../hw/Board.h"
+#include "../modem/Modem.h"
+#include "../net/Net.h"
+#include "../ui/Icons.h"
+#include "../ui/Ui.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);

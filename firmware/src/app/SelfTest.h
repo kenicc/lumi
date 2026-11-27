@@ -3,7 +3,7 @@
 // Prowadzi przez ekran, przyciski, rolkę, modem, dźwięk, baterię i sieć; przy błędzie
 // podpowiada, który przewód lub pin sprawdzić (na ekranie i w konsoli USB).
 // Wejście: przytrzymany Home przy włączaniu albo komenda "selftest" w konsoli.
-#include "app/Events.h"
+#include "Events.h"
 
 namespace selftest {
 

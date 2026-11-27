@@ -1,22 +1,23 @@
 // Ekrany LUMI: co jest na ekranie w danym stanie (bez logiki przycisków i zdarzeń - ta jest w App.cpp).
+#include "../BuildConfig.h"
 #include <Arduino.h>
 #include <LittleFS.h>
 
 #include <map>
 #include <string>
 
-#include "app/State.h"
-#include "audio/AudioOut.h"
-#include "core/AtParse.h"
-#include "core/Calendar.h"
-#include "core/Pairing.h"
-#include "core/Weather.h"
-#include "hw/Battery.h"
-#include "modem/Modem.h"
-#include "net/Identity.h"
-#include "net/Net.h"
-#include "ui/Icons.h"
-#include "ui/Ui.h"
+#include "State.h"
+#include "../audio/AudioOut.h"
+#include "../core/AtParse.h"
+#include "../core/Calendar.h"
+#include "../core/Pairing.h"
+#include "../core/Weather.h"
+#include "../hw/Battery.h"
+#include "../modem/Modem.h"
+#include "../net/Identity.h"
+#include "../net/Net.h"
+#include "../ui/Icons.h"
+#include "../ui/Ui.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);
@@ -331,7 +332,7 @@ void renderMedia() {
   if (st) ui::label(col, F.body, sc, st);
 
   bool many = C.mediaList.size() > 1;
-  if (many) ui::setRail(0, IC_UP, "Poprzednia", ui::Tone::Neutral);
+  if (many) ui::setRail(0, IC_UP, "Wcześniej", ui::Tone::Neutral);
   else ui::hideRail(0);
   if (playing || (current && as.connecting)) ui::setRail(1, IC_PAUSE, "Pauza", ui::Tone::Accent);
   else ui::setRail(1, IC_PLAY, "Graj", ui::Tone::Accent);

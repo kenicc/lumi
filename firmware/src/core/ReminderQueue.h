@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "core/Config.h"
+#include "Config.h"
 
 namespace rem {
 

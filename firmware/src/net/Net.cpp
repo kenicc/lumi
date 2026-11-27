@@ -1,4 +1,5 @@
-#include "net/Net.h"
+#include "../BuildConfig.h"
+#include "Net.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -13,15 +14,15 @@
 #include <deque>
 #include <set>
 
-#include "Version.h"
-#include "app/Diag.h"
-#include "app/Events.h"
-#include "audio/AudioOut.h"
-#include "hw/Battery.h"
-#include "modem/Modem.h"
-#include "app/App.h"
-#include "net/Identity.h"
-#include "net/Ota.h"
+#include "../Version.h"
+#include "../app/Diag.h"
+#include "../app/Events.h"
+#include "../audio/AudioOut.h"
+#include "../hw/Battery.h"
+#include "../modem/Modem.h"
+#include "../app/App.h"
+#include "Identity.h"
+#include "Ota.h"
 
 extern "C" const uint8_t lumi_ca_bundle[];
 

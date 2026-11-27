@@ -1,9 +1,9 @@
-#include "hw/Input.h"
+#include "Input.h"
 
 #include <Arduino.h>
 #include <string.h>
 
-#include "hw/Board.h"
+#include "Board.h"
 
 namespace input {
 
@@ -22,6 +22,10 @@ constexpr uint16_t HOME_SERVICE_MS = 5000;  // przytrzymanie Home 5 s = ekran se
 volatile int32_t wheelSteps = 0;
 volatile uint8_t wheelState = 0;
 int32_t wheelReported = 0;
+
+bool tracing = false;
+bool lastDown[(int)Key::Count] = {false};
+int32_t lastRaw = 0;
 
 // Tablica przejść enkodera kwadraturowego: odporna na drgania styków
 const int8_t kQuad[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
@@ -69,10 +73,22 @@ void configure(uint16_t minPressMs, uint16_t repeatIgnoreMs, bool oneButton) {
 void poll() {
   uint32_t now = millis();
   for (int i = 0; i < (int)Key::Count; i++) {
-    BtnEvent e = filters[i].update(digitalRead(kPins[i]) == LOW, now);
+    bool down = digitalRead(kPins[i]) == LOW;
+    if (tracing && down != lastDown[i])
+      Serial.printf("[wejscie] %s (GPIO%d) %s\n", kNames[i], kPins[i], down ? "wcisniety" : "puszczony");
+    lastDown[i] = down;
+    BtnEvent e = filters[i].update(down, now);
     if (e != BtnEvent::None) emit((Key)i, e);
   }
-  int32_t steps = wheelSteps / board::WHEEL_STEPS_PER_DETENT;
+  int32_t raw = wheelSteps;
+  if (tracing && raw != lastRaw) {
+    // surowe impulsy: jeśli rosną, a "zabki" nie, zmień WHEEL_STEPS_PER_DETENT w Board.h
+    Serial.printf("[wejscie] rolka: impulsy %ld, zabki %ld (A=GPIO%d %d, B=GPIO%d %d)\n", (long)raw,
+                  (long)(raw / board::WHEEL_STEPS_PER_DETENT), pins::WHEEL_A, digitalRead(pins::WHEEL_A),
+                  pins::WHEEL_B, digitalRead(pins::WHEEL_B));
+  }
+  lastRaw = raw;
+  int32_t steps = raw / board::WHEEL_STEPS_PER_DETENT;
   if (steps != wheelReported) {
     bus::post(Event(Ev::Wheel, steps - wheelReported));
     wheelReported = steps;
@@ -80,6 +96,9 @@ void poll() {
 }
 
 void inject(Key k, BtnEvent e) { emit(k, e); }
+
+void setTrace(bool on) { tracing = on; }
+bool trace() { return tracing; }
 
 const char* keyName(Key k) { return (int)k < (int)Key::Count ? kNames[(int)k] : "?"; }
 

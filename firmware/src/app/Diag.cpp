@@ -1,4 +1,4 @@
-#include "app/Diag.h"
+#include "Diag.h"
 
 #include <Arduino.h>
 #include <Preferences.h>

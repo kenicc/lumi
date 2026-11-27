@@ -1,10 +1,10 @@
-#include "core/Config.h"
+#include "Config.h"
 
 #include <ArduinoJson.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "core/AtParse.h"
+#include "AtParse.h"
 
 namespace cfg {
 
