@@ -27,6 +27,7 @@ struct Fonts {
   const lv_font_t* huge;   // temperatura na ekranie pogody
   const lv_font_t* icon;   // ikony w treści
   const lv_font_t* iconBig;
+  const lv_font_t* tileClock;  // zegar w kafelku (60 px: "00:00" musi się zmieścić w ok. 180 px)
 };
 
 constexpr int RAIL_W = 108;
@@ -50,15 +51,32 @@ void hideRails();
 bool railVisible(int slot);
 void flashRail(int slot);
 void setHighlight(int slot);  // tryb jednego przycisku, -1 = brak
+// Etykiety po prawej: domyślnie ukryte (treść na całą szerokość), akcje slotów działają dalej
+void setRailLabels(bool show);
+bool railLabels();
+const char* railText(int slot);  // nullptr, gdy slot pusty
+Tone railTone(int slot);
+// Pasek podpowiedzi na dole (gdy etykiet nie ma): co robi Dom, a co Dzwoń; nullptr = brak
+void hints(const char* home, Tone homeTone, const char* call);
 
 // Elementy treści
 lv_obj_t* label(lv_obj_t* parent, const lv_font_t* f, lv_color_t c, const char* text, bool wrap = false);
 // Kółko ze zdjęciem (96x96 RGB565) albo z inicjałem, gdy zdjęcia nie ma
 lv_obj_t* avatar(lv_obj_t* parent, const char* name, uint32_t color, int size, const lv_image_dsc_t* photo = nullptr);
 lv_obj_t* column(lv_obj_t* parent, int gap);
+// Kafelek: zaokrąglone pole w kolorze powierzchni, treść w kolumnie (wspólny wzór ekranów)
+lv_obj_t* tile(lv_obj_t* parent);
+lv_obj_t* row(lv_obj_t* parent, int gap);  // rząd kafelków o równej szerokości (dzieci: flex_grow 1)
+constexpr int TILE_PAD = 6;
+constexpr int TILE_GAP = 6;
 bool fits(const char* text, const lv_font_t* f, int width);
 // Krój tytułu, a gdy tekst się nie mieści w jednej linii - mniejszy (bez łamania imion i numerów)
 const lv_font_t* titleFont(const char* text);
+// Największy krój (48 -> 24 px, najmniej drugorzędny), w którym tekst z łamaniem mieści się w w x h
+const lv_font_t* fitFont(const char* text, int w, int h);
+int contentInnerW();             // szerokość treści bez marginesów (320 - 16, gdy etykiety ukryte)
+constexpr int CONTENT_INNER_H = 240 - 16;
+constexpr int HINT_BAR_H = 36;   // pasek podpowiedzi Dom / Dzwoń
 
 // Nakładki
 void notice(const char* icon, const char* text);

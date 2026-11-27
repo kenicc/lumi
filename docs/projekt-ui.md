@@ -15,11 +15,12 @@ Zrzuty obecnej wersji wszystkich ekranów: `firmware/sim/out/*.png` (generuje je
 - Rysuje to procesor (LVGL), nie przeglądarka. Rozmycia, cienie i przezroczystości warstw kosztują płynność. Zaokrąglenia, obrysy i płaskie wypełnienia są tanie.
 - **Dwa motywy: ciemny i jasny** plus tryb wysokiego kontrastu. Każdy ekran projektujesz w obu motywach. Rodzina wybiera motyw w aplikacji: ciemny, jasny albo automatycznie (jasny w dzień, ciemny wieczorem). Wieczorem jasne tło w ciemnym pokoju oślepia i zużywa więcej baterii, dlatego domyślnie zostaje ciemny albo automatyczny.
 
-**Przyciski fizyczne: prawa krawędź**
-- Trzy przyciski obok ekranu: **górny, środkowy, dolny**. Na ekranie każdy ma swoją etykietę na wysokości przycisku.
-- Środki przycisków na ekranie: **y = 32, 120, 208 px**. Etykieta musi "wskazywać" swój przycisk, czyli przylegać do prawej krawędzi.
-- Znaki dotykowe na obudowie: górny ma **kropkę**, dolny **kreskę**, środkowy nic. Na ekranie powtarzamy te znaki, żeby skojarzyć etykietę z przyciskiem pod palcem.
-- Inne przyciski poza ekranem: **Muzyka, Dom, Dzwoń, Zasilanie** oraz **rolka głośności**. Nie mają etykiet na ekranie, ale ekran reaguje na ich użycie (głośność, powrót do zegara).
+**Przyciski fizyczne i sterowanie (od 27.11: bez etykiet przycisków na ekranie)**
+- Na ekranie **nie ma kolumny etykiet**. Treść zajmuje całe 320 x 240 px, w kafelkach.
+- **Boczne przyciski obudowy** (prawa kolumna) robią zawsze to samo: **górny (kropka) = w górę / poprzedni, środkowy = OK, dolny (kreska) = w dół / następny**. Na zegarze środkowy pokazuje pogodę na jutro.
+- **Dolne przyciski:** Dzwoń (zielony) = kontakty / odbierz / zadzwoń / tak; Dom = wróć / odrzuć / rozłącz / nie / później; Muzyka = radio. **Rolka** = głośność.
+- Na ekranach z wyborem (rozmowa przychodząca, trwająca, nieodebrana, przypomnienie, wiadomość, kontakt) na dole jest **pasek podpowiedzi 30 px**: po prawej "Dzwoń: …" na zielono, na lewo od niego "Dom: …" (czerwony, gdy odrzuca lub rozłącza). Położenie odpowiada przyciskom: Dzwoń jest pod prawym rogiem ekranu.
+- Wyjątek: **tryb jednego przycisku** pokazuje dawną kolumnę etykiet, bo wyróżnienie musi być widać.
 
 **Czytelność (użytkownik: senior, często słaby wzrok, drżenie dłoni)**
 - Najmniejszy tekst: **20 px**, i tylko dla rzeczy drugorzędnych (data, "1 z 4"). Treść główna: 28-48 px. Zegar: 72-96 px.
@@ -34,31 +35,35 @@ Zrzuty obecnej wersji wszystkich ekranów: `firmware/sim/out/*.png` (generuje je
 
 ### Wymiary (płótno 320 x 240 px, w Figmie ramka 320 x 240 w skali 1x)
 
+**Ekran główny** (według szkicu z 27.11, dopasowany do obudowy v3):
+
 ```
-x: 0                         212 | 212           320
-   +----------------------------+----------------+  y = 0
-   |                            |  przycisk górny |  środek y = 32  (od 0 do 64)
-   |   OBSZAR TREŚCI            +----------------+
-   |   212 x 240                |                |
-   |   margines wewnętrzny 8    | przycisk środek|  środek y = 120 (od 88 do 152)
-   |                            +----------------+
-   |                            |                |
-   |                            |  przycisk dolny |  środek y = 208 (od 176 do 240)
-   +----------------------------+----------------+  y = 240
+x: 0                                   212   218            312 320
+   +--------------------------------------+-----+--------------+  y = 0
+   |  margines 8                                                |
+   |  +--------------------------------+   +-------------+      |
+   |  | KAFELEK ZEGARA                 |   | POGODA      |      |
+   |  |  18:40         (cyfry 60 px)   |   |  ikona 48   |      |
+   |  |  [=======-----] 76%   Wi-Fi    |   |  6° (36)    |      |  wysokość: reszta nad pasem daty
+   |  +--------------------------------+   +-------------+      |
+   |  +-----------------------------------------------------+   |
+   |  | PAS DATY:  Wtorek wieczorem (36)                    |   |  ok. 83 px
+   |  |            24 listopada (28, drugorzędny)           |   |
+   |  +-----------------------------------------------------+   |
+   +------------------------------------------------------------+  y = 240
 ```
 
 | Element | Wymiar |
 | --- | --- |
-| Płótno | 320 x 240 px |
-| Obszar treści | x 0-212, szerokość **212 px**, cała wysokość; margines wewnętrzny 8 px |
-| Kolumna etykiet przycisków | x 212-320, szerokość **108 px** |
-| Etykieta przycisku | 108 x **64 px**, środki na y = **32 / 120 / 208** (górne krawędzie 0 / 88 / 176) |
-| Odstęp między etykietami | 24 px |
-| Zaokrąglenie etykiety | dowolne od lewej strony; prawa krawędź prosta, przyklejona do brzegu ekranu (etykieta "wychodzi" z przycisku) |
-| Wnętrze etykiety | ikona 24 px u góry, słowo pod spodem; szerokość tekstu najwyżej ok. 96 px |
-| Znaki dotykowe na etykiecie | górna: kropka 9 px, dolna: kreska 16 x 4 px, środkowa: nic |
-| Ekrany bez przycisków (np. wiadomość, parowanie) | treść może zająć całą szerokość 320 px |
-| Ikona połączenia (zegar) | prawy dolny róg obszaru treści, ok. 30 x 24 px: Wi-Fi albo 4 kreski zasięgu |
+| Płótno | 320 x 240 px, margines 8 px, odstęp między kafelkami 6 px |
+| Kafelek | zaokrąglenie 14 px, wypełnienie `surface`, odstęp wewnętrzny 6 px (lewy 8 px) |
+| Kafelek zegara | szerokość: reszta po kafelku pogody; cyfry 60 px (krój dobrany tak, żeby zmieściło się "00:00") |
+| Pasek baterii | belka 20 px z zaokrągleniem, procent obok (nie na belce); bez pomiaru baterii paska nie ma |
+| Kafelek pogody | 96 px szerokości, ikona 48 px, temperatura 36 px; bez Wi-Fi: "bez Wi-Fi" |
+| Pas daty | cała szerokość; dzień (z porą dnia, gdy się mieści) 36 px, data 28 px |
+| Problem (bateria, telefon, SIM, zasięg) | zamiast paska baterii, kolorem `no` |
+| Pasek podpowiedzi | 320 x 30 px na dole, tekst 20 px z ikoną przycisku |
+| Ekrany bez wyboru (pogoda, radio, kontakt) | cała szerokość 320 px |
 
 **Skala tekstu** (px, w trzech wielkościach ustawianych przez rodzinę):
 

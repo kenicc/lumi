@@ -10,5 +10,8 @@ void poll();  // co kilka sekund
 uint16_t millivolts();
 uint8_t percent();
 bool charging();
+// false, gdy nie ma czym zmierzyć (brak dzielnika na GPIO1 i brak odczytu z modemu) - wtedy
+// procent nie znaczy nic i interfejs nie może ostrzegać o "słabej baterii"
+bool known();
 
 }  // namespace battery

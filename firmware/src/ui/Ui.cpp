@@ -13,6 +13,7 @@ LV_FONT_DECLARE(lumi_b48);
 LV_FONT_DECLARE(lumi_r20);
 LV_FONT_DECLARE(lumi_r24);
 LV_FONT_DECLARE(lumi_r28);
+LV_FONT_DECLARE(lumi_d60);
 LV_FONT_DECLARE(lumi_d72);
 LV_FONT_DECLARE(lumi_d96);
 
@@ -26,12 +27,12 @@ Fonts F;
 lv_obj_t* scr;
 lv_obj_t* contentObj;
 
-// Środki przycisków prawej kolumny względem ekranu. Rozstaw przycisków 18 mm to ok. 100 px
-// na ekranie 2,8" (5,56 px/mm), więc idealnie byłoby 20 / 120 / 220 px - ale wtedy skrajne
-// etykiety wychodzą poza ekran. Kompromis: 32 / 120 / 208 px, skrajne etykiety ok. 2 mm
-// bliżej środka niż przycisk. Do sprawdzenia na makiecie (etap 4).
-constexpr int RAIL_Y[3] = {32, 120, 208};
-constexpr int RAIL_H = 64;
+// Etykiety przycisków prawej kolumny = kafelki dokładnie naprzeciw przycisków obudowy v2.2/v3
+// (hardware/obudowa_v3). Otwory 16,13 mm co 19,13 mm; obraz 43,2 mm = 240 px (5,56 px/mm), środki
+// przycisków wypadają na y = 15 / 122 / 228 px. Kafelek ma wysokość przycisku, a skrajne są ucięte
+// krawędzią ekranu (przycisk wystaje poza obraz) - przerwy między kafelkami = przerwy między otworami.
+constexpr int RAIL_TOP[3] = {0, 77, 183};
+constexpr int RAIL_BOT[3] = {60, 166, 240};
 
 struct Slot {
   lv_obj_t* box;
@@ -43,6 +44,13 @@ struct Slot {
 };
 Slot rail[3];
 int highlighted = -1;
+
+// Etykiety przycisków na ekranie: domyślnie ukryte (projekt 27.11 - ekran w całości na kafelki,
+// boczne przyciski obudowy robią zawsze to samo: góra / OK / dół). Akcje slotów zostają, tylko
+// nie są rysowane. Pokazujemy je w trybie jednego przycisku, gdzie wyróżnienie musi być widać.
+bool labelsShown = false;
+lv_obj_t* hintObj = nullptr;
+constexpr int HINT_H = 36;
 
 lv_obj_t* noticeObj = nullptr;
 lv_obj_t* toastObj = nullptr;
@@ -147,13 +155,13 @@ void setTheme(uint8_t size, bool hc) {
   }
   switch (size) {
     case 0:
-      F = {&lumi_b36, &lumi_b28, &lumi_r20, &lumi_d72, &lumi_d96, &lumi_b28, &lumi_b48};
+      F = {&lumi_b36, &lumi_b28, &lumi_r20, &lumi_d72, &lumi_d96, &lumi_b28, &lumi_b48, &lumi_d60};
       break;
     case 1:
-      F = {&lumi_b48, &lumi_b36, &lumi_r24, &lumi_d72, &lumi_d96, &lumi_b36, &lumi_b48};
+      F = {&lumi_b48, &lumi_b36, &lumi_r24, &lumi_d72, &lumi_d96, &lumi_b36, &lumi_b48, &lumi_d60};
       break;
     default:
-      F = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_d72, &lumi_d96, &lumi_b36, &lumi_b48};
+      F = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_d72, &lumi_d96, &lumi_b36, &lumi_b48, &lumi_d60};
       break;
   }
   if (hc && size == 0) F.small = &lumi_b20;  // w wysokim kontraście cienkie litery znikają
@@ -171,7 +179,7 @@ void begin() {
   lv_obj_set_style_text_color(scr, P.text, 0);
 
   contentObj = panel(scr);
-  lv_obj_set_size(contentObj, CONTENT_W, 240);
+  lv_obj_set_size(contentObj, labelsShown ? CONTENT_W : 320, 240);
   lv_obj_set_pos(contentObj, 0, 0);
   lv_obj_set_style_pad_all(contentObj, 8, 0);
 
@@ -180,36 +188,36 @@ void begin() {
     s.box = lv_obj_create(scr);
     noScroll(s.box);
     // wysunięta poza prawą krawędź, żeby prawe narożniki były proste - "wskazuje" przycisk
-    lv_obj_set_size(s.box, RAIL_W + 12, RAIL_H);
-    lv_obj_set_pos(s.box, 320 - RAIL_W, RAIL_Y[i] - RAIL_H / 2);
+    lv_obj_set_size(s.box, RAIL_W + 12, RAIL_BOT[i] - RAIL_TOP[i]);
+    lv_obj_set_pos(s.box, 320 - RAIL_W, RAIL_TOP[i]);
     lv_obj_set_style_radius(s.box, 18, 0);
     lv_obj_set_style_pad_all(s.box, 0, 0);
     lv_obj_set_style_outline_pad(s.box, 2, 0);
 
     s.icon = lv_label_create(s.box);
     lv_obj_set_style_text_font(s.icon, &lumi_b24, 0);
-    lv_obj_align(s.icon, LV_ALIGN_TOP_MID, -6, 5);
+    lv_obj_align(s.icon, LV_ALIGN_CENTER, -6, -13);  // ikona i słowo razem na środku kafelka
 
     s.text = lv_label_create(s.box);
     lv_label_set_long_mode(s.text, LV_LABEL_LONG_DOT);  // za długie imię kończy się "..."
     lv_obj_set_width(s.text, RAIL_W - 8);
     lv_obj_set_style_text_align(s.text, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s.text, LV_ALIGN_BOTTOM_MID, -6, -4);
+    lv_obj_align(s.text, LV_ALIGN_CENTER, -6, 14);
 
     // Znak dotykowy przy krawędzi ekranu: kropka (górny), kreska (dolny), nic (środkowy)
     s.mark = lv_obj_create(s.box);
     noScroll(s.mark);
     lv_obj_set_style_border_width(s.mark, 0, 0);
     lv_obj_set_style_bg_opa(s.mark, LV_OPA_COVER, 0);
-    // w rzędzie ikony, przy prawej krawędzi - nie koliduje z dłuższym słowem pod spodem
+    // w rogu kafelka przy krawędzi ekranu (12 px kafelka jest za krawędzią): nie wchodzi na tekst
     if (i == 0) {
-      lv_obj_set_size(s.mark, 9, 9);
+      lv_obj_set_size(s.mark, 8, 8);
       lv_obj_set_style_radius(s.mark, LV_RADIUS_CIRCLE, 0);
-      lv_obj_align(s.mark, LV_ALIGN_TOP_RIGHT, -22, 12);
+      lv_obj_align(s.mark, LV_ALIGN_TOP_RIGHT, -18, 6);
     } else if (i == 2) {
-      lv_obj_set_size(s.mark, 16, 4);
+      lv_obj_set_size(s.mark, 12, 4);
       lv_obj_set_style_radius(s.mark, 2, 0);
-      lv_obj_align(s.mark, LV_ALIGN_TOP_RIGHT, -19, 15);
+      lv_obj_align(s.mark, LV_ALIGN_TOP_RIGHT, -17, 8);
     } else {
       lv_obj_add_flag(s.mark, LV_OBJ_FLAG_HIDDEN);
     }
@@ -232,7 +240,65 @@ void setBackground(const void* img) {
   lv_obj_set_style_bg_image_src(scr, img, 0);
 }
 
-void setContentWide(bool wide) { lv_obj_set_width(contentObj, wide ? 320 : CONTENT_W); }
+void setContentWide(bool wide) { lv_obj_set_width(contentObj, (wide || !labelsShown) ? 320 : CONTENT_W); }
+
+void setRailLabels(bool show) {
+  if (show == labelsShown) return;
+  labelsShown = show;
+  for (int i = 0; i < 3; i++) {
+    if (show && rail[i].visible) lv_obj_remove_flag(rail[i].box, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(rail[i].box, LV_OBJ_FLAG_HIDDEN);
+  }
+  setContentWide(false);
+}
+
+bool railLabels() { return labelsShown; }
+
+const char* railText(int i) { return (i >= 0 && i < 3 && rail[i].visible) ? lv_label_get_text(rail[i].text) : nullptr; }
+
+Tone railTone(int i) { return (i >= 0 && i < 3) ? rail[i].tone : Tone::Neutral; }
+
+// Podpowiedź na dole ekranu, gdy etykiet nie ma: co robią Dom i Dzwoń na tym ekranie.
+// Położenie odpowiada przyciskom pod ekranem: Dom pod środkiem-prawą częścią, Dzwoń w prawym rogu.
+void hints(const char* home, Tone homeTone, const char* call) {
+  if (hintObj) {
+    lv_obj_delete(hintObj);
+    hintObj = nullptr;
+  }
+  lv_obj_set_height(contentObj, 240);
+  if ((!home && !call) || labelsShown) return;
+  hintObj = panel(scr);
+  lv_obj_set_size(hintObj, 320, HINT_H);
+  lv_obj_set_pos(hintObj, 0, 240 - HINT_H);
+  lv_obj_set_style_bg_color(hintObj, P.surface, 0);
+  lv_obj_set_style_bg_opa(hintObj, LV_OPA_COVER, 0);
+  lv_obj_set_style_pad_hor(hintObj, 10, 0);
+  auto put = [](const char* icon, const char* text, lv_color_t c) {
+    char b[48];
+    snprintf(b, sizeof b, "%s %s", icon, text);
+    lv_obj_t* l = lv_label_create(hintObj);
+    lv_obj_set_style_text_font(l, &lumi_b24, 0);
+    lv_obj_set_style_text_color(l, c, 0);
+    lv_label_set_text(l, b);
+    return l;
+  };
+  // Dzwoń w prawym rogu (przycisk jest pod prawą krawędzią), Dom zaraz na lewo od niego
+  lv_obj_t* right = nullptr;
+  if (call) {
+    right = put(IC_PHONE, call, P.yes);
+    lv_obj_align(right, LV_ALIGN_RIGHT_MID, 0, 0);
+  }
+  if (home) {
+    lv_obj_t* h = put(IC_HOME, home, homeTone == Tone::No ? P.no : P.text);
+    if (right) {
+      lv_obj_update_layout(right);
+      lv_obj_align_to(h, right, LV_ALIGN_OUT_LEFT_MID, -18, 0);
+    } else {
+      lv_obj_align(h, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+  }
+  lv_obj_set_height(contentObj, 240 - HINT_H);
+}
 
 void setRail(int i, const char* icon, const char* text, Tone tone) {
   if (i < 0 || i > 2) return;
@@ -243,7 +309,7 @@ void setRail(int i, const char* icon, const char* text, Tone tone) {
   lv_label_set_text(s.text, text);
   lv_obj_set_style_text_font(s.text, railFont(text), 0);
   styleSlot(s);
-  lv_obj_remove_flag(s.box, LV_OBJ_FLAG_HIDDEN);
+  if (labelsShown) lv_obj_remove_flag(s.box, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_style_outline_width(s.box, highlighted == i ? 4 : 0, 0);
 }
 
@@ -325,12 +391,51 @@ lv_obj_t* column(lv_obj_t* parent, int gap) {
   return c;
 }
 
+lv_obj_t* tile(lv_obj_t* parent) {
+  lv_obj_t* t = panel(parent);
+  lv_obj_set_size(t, lv_pct(100), LV_SIZE_CONTENT);
+  lv_obj_set_style_bg_color(t, P.surface, 0);
+  lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(t, 14, 0);
+  lv_obj_set_style_pad_all(t, TILE_PAD, 0);
+  lv_obj_set_style_pad_left(t, TILE_PAD + 2, 0);
+  lv_obj_set_style_border_width(t, P.highContrast ? 2 : 0, 0);  // w wysokim kontraście tło = czerń, więc ramka
+  lv_obj_set_style_border_color(t, P.text, 0);
+  lv_obj_set_flex_flow(t, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_row(t, 0, 0);
+  return t;
+}
+
+lv_obj_t* row(lv_obj_t* parent, int gap) {
+  lv_obj_t* r = panel(parent);
+  lv_obj_set_size(r, lv_pct(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(r, gap, 0);
+  return r;
+}
+
 bool fits(const char* text, const lv_font_t* f, int width) {
   return lv_text_get_width(text, strlen(text), f, 0) <= width;
 }
 
+int contentInnerW() { return (labelsShown ? CONTENT_W : 320) - 16; }
+
 const lv_font_t* titleFont(const char* text) {
-  return fits(text, F.title, CONTENT_W - 16) ? F.title : F.body;
+  int w = contentInnerW();
+  if (fits(text, &lumi_b48, w)) return &lumi_b48;  // jak największy - imię ma być czytelne z daleka
+  return fits(text, F.title, w) ? F.title : F.body;
+}
+
+// Największy krój, w którym tekst (łamany na linie) mieści się w prostokącie w x h.
+// Najmniejszy dopuszczalny to krój drugorzędny (min. 20 px) - mniejszego senior nie przeczyta.
+const lv_font_t* fitFont(const char* text, int w, int h) {
+  static const lv_font_t* const order[] = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_b24};
+  for (const lv_font_t* f : order) {
+    lv_point_t sz;
+    lv_text_get_size(&sz, text, f, 0, 0, w, LV_TEXT_FLAG_NONE);
+    if (sz.y <= h && sz.x <= w) return f;
+  }
+  return F.small;
 }
 
 // --- nakładki ---
@@ -352,8 +457,8 @@ void notice(const char* icon, const char* text) {
   // własna etykieta "OK" przy górnym przycisku - każdy przycisk i tak zamyka
   lv_obj_t* ok = lv_obj_create(noticeObj);
   noScroll(ok);
-  lv_obj_set_size(ok, RAIL_W + 12, RAIL_H);
-  lv_obj_set_pos(ok, 320 - RAIL_W, RAIL_Y[0] - RAIL_H / 2);
+  lv_obj_set_size(ok, RAIL_W + 12, RAIL_BOT[0] - RAIL_TOP[0]);
+  lv_obj_set_pos(ok, 320 - RAIL_W, RAIL_TOP[0]);
   lv_obj_set_style_radius(ok, 14, 0);
   lv_obj_set_style_bg_color(ok, P.surface, 0);
   lv_obj_set_style_border_width(ok, P.highContrast ? 3 : 0, 0);

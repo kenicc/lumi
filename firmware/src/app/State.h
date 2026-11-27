@@ -10,6 +10,7 @@
 #include <string>
 
 #include "../core/Config.h"
+#include "Events.h"
 #include "../core/ReminderQueue.h"
 #include "../net/Net.h"
 
@@ -69,6 +70,8 @@ int contactIndexByName(const std::string& name);  // -1 gdy autor wiadomości ni
 // --- ekrany (Screens.cpp) ---
 void render();
 void go(Screen s);
+// Który slot akcji wykonuje dolny przycisk Dom/Dzwoń na bieżącym ekranie (-1 = jego zwykłe działanie)
+int bottomSlot(Key k);
 void updateLive();
 const lv_image_dsc_t* photoFor(const cfg::Contact* k);
 void freeUnusedPhotos();

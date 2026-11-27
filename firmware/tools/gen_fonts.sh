@@ -32,6 +32,7 @@ gen_digits() { # duże cyfry zegara i temperatury
 }
 for s in 20 24 28 36 48; do gen "lumi_b$s" $s 700 "$ICONS"; done
 for s in 20 24 28; do gen "lumi_r$s" $s 400 ""; done
+gen_digits lumi_d60 60
 gen_digits lumi_d72 72
 gen_digits lumi_d96 96
 echo OK
