@@ -14,6 +14,10 @@ void configure(uint16_t minPressMs, uint16_t repeatIgnoreMs, bool oneButton);
 // Symulacja przycisku z konsoli (testy interfejsu bez lutowania)
 void inject(Key k, BtnEvent e);
 
+// Podgląd w konsoli: każde naciśnięcie, puszczenie i obrót rolki (sprawdzanie okablowania bez ekranu)
+void setTrace(bool on);
+bool trace();
+
 const char* keyName(Key k);
 bool keyFromName(const char* s, Key& out);
 

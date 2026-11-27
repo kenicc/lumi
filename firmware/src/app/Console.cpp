@@ -49,6 +49,7 @@ void help() {
       "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
       "  selftest          test sprzetu krok po kroku (albo Home przytrzymany przy wlaczaniu)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)\n"
+      "  input             podglad przyciskow i rolki w konsoli (wl/wyl) - test okablowania bez ekranu\n"
       "  lcd test          pasy: czerwony zielony niebieski bialy czarny (od lewej)\n"
       "  lcd inv|flip|bgr  przelacz: negatyw / obrot o 180 / zamiana czerwony-niebieski\n"
       "  lcd reset         ustawienia ekranu domyslne");
@@ -134,6 +135,11 @@ void exec(char* l) {
   if (!strcmp(l, "help")) help();
   else if (!strcmp(l, "status")) status();
   else if (!strcmp(l, "lcd")) lcd(arg);
+  else if (!strcmp(l, "input")) {
+    input::setTrace(!input::trace());
+    Serial.println(input::trace() ? "podglad wlaczony: krec rolka, naciskaj przyciski (input = wylacz)"
+                                  : "podglad wylaczony");
+  }
   else if (!strcmp(l, "diag")) modem::diag();
   else if (!strcmp(l, "at")) modem::raw(arg);
   else if (!strcmp(l, "bridge")) modem::bridge(Serial);
