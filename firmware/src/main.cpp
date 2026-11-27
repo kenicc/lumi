@@ -19,6 +19,7 @@
 #include "hw/Display.h"
 #include "hw/Input.h"
 #include "net/Ota.h"
+#include "net/Panel.h"
 
 // Po wybudzeniu przyciskiem: włącz dopiero po przytrzymaniu (przypadkowe naciśnięcie w torbie nie włącza)
 static void requireHoldToPowerOn() {
@@ -52,6 +53,7 @@ void setup() {
   input::begin();
   battery::begin();
   app::begin();
+  panel::begin();
   // Strażnik: jeśli pętla główna zawiśnie na 15 s, urządzenie samo się zrestartuje
   // (u seniora nikt nie naciśnie RESET, a zawieszone LUMI nie odbierze rozmowy)
   esp_task_wdt_init(15, true);
