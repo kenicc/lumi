@@ -482,34 +482,47 @@ void renderMedia() {
   else ui::hideRail(2);
 }
 
+// Pogoda: dwa kafelki w kolorze pogody - teraz (duża temperatura) i jutro (z radą, np. "Weź parasol")
 void renderWeather() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
   wx::Forecast f = net::forecast();
-  lv_obj_t* col = ui::column(ui::content(), 2);
+  lv_obj_t* col = ui::column(ui::content(), ui::TILE_GAP);
   if (!f.valid) {
-    ui::label(col, F.body, P.text, "Brak prognozy", true);
-    ui::label(col, F.small, P.dim, "Pogoda przychodzi przez Wi-Fi", true);
+    lv_obj_t* t = ui::tile(col);
+    lv_obj_set_flex_grow(t, 1);
+    lv_obj_set_flex_align(t, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    ui::label(t, F.title, P.text, "Brak prognozy", true);
+    ui::label(t, F.body, P.dim, net::wifiConnected() ? "Za chwilę się pobierze" : "Pogoda przychodzi przez Wi-Fi", true);
   } else {
-    if (!C.place.empty()) ui::label(col, F.small, P.dim, C.place.c_str());
     char b[48];
-    lv_obj_t* row = lv_obj_create(col);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_t* now = ui::tile(col);
+    lv_obj_set_flex_grow(now, 1);
+    lv_obj_set_flex_align(now, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    if (!P.highContrast) lv_obj_set_style_bg_color(now, weatherTint(f.codeNow), 0);
+    lv_obj_t* row = ui::row(now, 12);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(row, 10, 0);
-    ui::label(row, F.iconBig, P.accent, weatherIcon(f.codeNow));
+    ui::label(row, F.iconBig, P.text, weatherIcon(f.codeNow));
     snprintf(b, sizeof b, "%d°", (int)lroundf(f.tempNow));
-    ui::label(row, F.clock, P.text, b);
-    ui::label(col, F.small, P.text, wx::textFor(f.codeNow), true);
+    // największy krój, w którym zmieści się nawet "-10°" obok ikony
+    int tw = ui::contentInnerW() - 2 * ui::TILE_PAD - 12 - (int)lv_text_get_width(weatherIcon(f.codeNow), strlen(weatherIcon(f.codeNow)), F.iconBig, 0) - 8;
+    ui::label(row, ui::fits("-10°", F.huge, tw) ? F.huge : F.clock, P.text, b);
+    std::string line = wx::textFor(f.codeNow);
+    if (!C.place.empty()) line += ", " + C.place;
+    const char* lt = ui::fits(line.c_str(), F.body, ui::contentInnerW() - 20) ? line.c_str() : wx::textFor(f.codeNow);
+    ui::label(now, F.body, P.text, lt);
+
     if (f.tomorrow.valid) {
-      snprintf(b, sizeof b, "Jutro %s %d°/%d°", weatherIcon(f.tomorrow.code), (int)lroundf(f.tomorrow.tMin),
-               (int)lroundf(f.tomorrow.tMax));
-      ui::label(col, F.body, P.text, b, true);
+      lv_obj_t* tm = ui::tile(col);
+      if (!P.highContrast) lv_obj_set_style_bg_color(tm, weatherTint(f.tomorrow.code), 0);
+      lv_obj_t* r2 = ui::row(tm, 10);
+      lv_obj_set_flex_align(r2, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      ui::label(r2, F.body, P.dim, "Jutro");
+      ui::label(r2, F.title, P.text, weatherIcon(f.tomorrow.code));
+      snprintf(b, sizeof b, "%d° / %d°", (int)lroundf(f.tomorrow.tMin), (int)lroundf(f.tomorrow.tMax));
+      ui::label(r2, F.title, P.text, b);
       const char* hint = wx::hintFor(f.tomorrow.code, f.tomorrow.tMin);
-      if (*hint) ui::label(col, F.body, P.accent, hint, true);
-      else ui::label(col, F.small, P.dim, wx::textFor(f.tomorrow.code), true);
+      ui::label(tm, F.body, *hint ? P.accent : P.dim, *hint ? hint : wx::textFor(f.tomorrow.code), true);
     }
   }
   ui::hideRail(0);

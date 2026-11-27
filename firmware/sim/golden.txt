@@ -6,7 +6,7 @@
 02_kontakty ca350c2fd4995920
 03_kontakty_nastepny 593a97429d1ef314
 04_radio_gra 55ed19e2c47756ef
-05_pogoda 88cad07f8346ec1b
+05_pogoda 61d654eafe42ae23
 06_potwierdzenie 69d8540b4d15df0c
 07_rozmowa_przychodzaca_auto b0edc6681aa1a28a
 08_rozmowa_przychodzaca 94464ed650abc36e
