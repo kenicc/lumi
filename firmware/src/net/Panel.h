@@ -7,6 +7,7 @@
 namespace panel {
 
 void begin();             // nic nie robi, jeśli wariant nie ma LUMI_WEB_PANEL
-std::string address();    // "http://192.168.1.23:8080" albo "" gdy brak sieci lub panel wyłączony
+std::string address();
+void setOwnNetwork(bool on);  // własna sieć Wi-Fi LUMI-PANEL (zapamiętane); domyślnie włączona    // "http://192.168.1.23:8080" albo "" gdy brak sieci lub panel wyłączony
 
 }  // namespace panel

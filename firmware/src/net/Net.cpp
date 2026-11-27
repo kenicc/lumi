@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
+#include <atomic>
 #include <LittleFS.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -48,6 +49,12 @@ volatile Cloud cloudState = Cloud::NoWifi;
 
 WiFiMulti* multi = nullptr;
 bool wifiOff = true;
+
+// Własna sieć panelu przycisków (prototyp): telefon łączy się wprost z LUMI, więc panel działa także
+// w sieciach, które blokują ruch między urządzeniami (szkolne, publiczne, część hotspotów).
+std::atomic<bool> panelApOn{false};
+bool apUp = false;
+constexpr const char* PANEL_SSID = "LUMI-PANEL";
 bool ntpStarted = false, ntpPosted = false;
 bool helloDone = false;
 uint32_t lastWeather = 0, lastSync = 0, lastReport = 0, connectingSince = 0;
@@ -184,6 +191,37 @@ void pageSave() {
   provisionUntil = millis() + 3000;  // daj czas na wysłanie odpowiedzi
 }
 
+// Wyłącz radio - chyba że działa sieć panelu, wtedy tylko rozłącz z siecią domową
+void radioOff() {
+  if (panelApOn) {
+    WiFi.disconnect(false);
+    return;
+  }
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  wifiOff = true;
+  apUp = false;
+}
+
+void ensurePanelAp() {
+  if (web) return;  // trwa konfiguracja Wi-Fi z telefonu - ona ma pierwszeństwo
+  if (!panelApOn) {
+    if (apUp) {
+      WiFi.softAPdisconnect(true);
+      WiFi.mode(wifiOff ? WIFI_OFF : WIFI_STA);
+      apUp = false;
+    }
+    return;
+  }
+  if (apUp && (WiFi.getMode() & WIFI_MODE_AP)) return;
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(PANEL_SSID, identity::apPassword());
+  wifiOff = false;
+  apUp = true;
+  Serial.printf("[panel] siec Wi-Fi \"%s\", haslo %s, potem http://%s:8080\n", PANEL_SSID, identity::apPassword(),
+                WiFi.softAPIP().toString().c_str());
+}
+
 void startAp() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);
@@ -217,6 +255,7 @@ void stopAp() {
   }
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_STA);
+  apUp = false;  // sieć panelu (jeśli włączona) wróci w następnym obiegu
   cfgDirty = true;  // nowe sieci
   connectingSince = millis();
   setCloud(Cloud::Connecting);
@@ -590,6 +629,7 @@ void task(void*) {
       continue;
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
+    ensurePanelAp();
     Settings s = snapshot();
     xSemaphoreTake(mtx, portMAX_DELAY);
     bool dirty = cfgDirty;
@@ -613,17 +653,13 @@ void task(void*) {
 
     // Cisza elektryczna: gra radio FM, a urządzenie jest już skonfigurowane
     if (audio::fmActive() && !unconfigured) {
-      if (!wifiOff) {
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
-        wifiOff = true;
-      }
+      if (!wifiOff) radioOff();
       continue;
     }
     if (wifiRetryAt && (int32_t)(millis() - wifiRetryAt) < 0) continue;  // przerwa między próbami
     wifiRetryAt = 0;
     if (wifiOff) {
-      WiFi.mode(WIFI_STA);
+      WiFi.mode(panelApOn ? WIFI_AP_STA : WIFI_STA);
       wifiOff = false;
       if (unconfigured) connectingSince = millis();
     }
@@ -641,9 +677,7 @@ void task(void*) {
       uint32_t wait = wifiBackoffMs(wifiFails);
       if (wait) {
         if (wifiFails == WIFI_QUICK_TRIES + 1) Serial.println("[wifi] brak znanej sieci - kolejne proby coraz rzadziej");
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
-        wifiOff = true;
+        radioOff();
         wifiRetryAt = millis() + wait;
       }
       continue;
@@ -748,6 +782,8 @@ void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
 void checkUpdateNow() { otaForce = true; }
+void setPanelAp(bool on) { panelApOn = on; }
+bool panelAp() { return panelApOn; }
 
 std::vector<Message> takeMessages() {
   xSemaphoreTake(mtx, portMAX_DELAY);

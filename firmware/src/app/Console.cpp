@@ -50,7 +50,7 @@ void help() {
       "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
       "  selftest          test sprzetu krok po kroku (albo Home przytrzymany przy wlaczaniu)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)\n"
-      "  panel             adres panelu z przyciskami w przegladarce (LUMI musi byc w sieci Wi-Fi)\n"
+      "  panel             jak otworzyc panel z przyciskami w przegladarce; panel ap - wl/wyl siec LUMI-PANEL\n"
       "  input             podglad przyciskow i rolki w konsoli (wl/wyl) - test okablowania bez ekranu\n"
       "  lcd test          pasy: czerwony zielony niebieski bialy czarny (od lewej)\n"
       "  lcd inv|flip|bgr  przelacz: negatyw / obrot o 180 / zamiana czerwony-niebieski\n"
@@ -138,9 +138,10 @@ void exec(char* l) {
   else if (!strcmp(l, "status")) status();
   else if (!strcmp(l, "lcd")) lcd(arg);
   else if (!strcmp(l, "panel")) {
+    if (!strcmp(arg, "ap")) panel::setOwnNetwork(!net::panelAp());
     std::string a = panel::address();
-    if (!a.empty()) Serial.printf("otworz w przegladarce: %s\n", a.c_str());
-    else Serial.println("brak polaczenia z Wi-Fi - najpierw: wifi <nazwa sieci> <haslo>");
+    if (!a.empty()) Serial.printf("panel z przyciskami:\n%s\n", a.c_str());
+    else Serial.println("panel niedostepny: brak Wi-Fi i wylaczona siec LUMI-PANEL (wlacz: panel ap)");
   }
   else if (!strcmp(l, "input")) {
     input::setTrace(!input::trace());

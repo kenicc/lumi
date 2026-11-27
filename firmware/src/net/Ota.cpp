@@ -97,7 +97,7 @@ bool install(const Offer& o, std::string& err) {
   if (o.build <= LUMI_FW_BUILD) return err = "nie nowsza", false;
   if (o.size < 100000 || o.sha256.size() != 64) return err = "zla oferta", false;
   Preferences rolledCheck;
-  rolledCheck.begin("lumi-ota", true);
+  rolledCheck.begin("lumi-ota", false);  // tryb odczytu przy braku przestrzeni wypisuje błąd NVS
   bool badBefore = rolledCheck.getInt("bad", 0) == o.build;
   rolledCheck.end();
   if (badBefore) return err = "ta wersja juz raz nie wstala", false;

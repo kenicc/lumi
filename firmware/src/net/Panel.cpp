@@ -4,11 +4,14 @@
 #ifdef LUMI_WEB_PANEL
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
 #include "../app/Events.h"
 #include "../hw/Input.h"
+#include "../net/Identity.h"
+#include "../net/Net.h"
 
 namespace panel {
 
@@ -73,6 +76,7 @@ void onKey() {
     srv->send(400, "text/plain", "nieznany przycisk");
     return;
   }
+  Serial.printf("[panel] %s %s\n", srv->arg("k").c_str(), srv->arg("e") == "long" ? "(dlugo)" : "");
   if (srv->arg("e") == "long") {
     input::inject(k, BtnEvent::HoldStart);
     input::inject(k, BtnEvent::Long);
@@ -94,7 +98,9 @@ void onWheel() {
 
 void task(void*) {
   for (;;) {
-    if (WiFi.status() != WL_CONNECTED) {
+    bool sta = WiFi.status() == WL_CONNECTED;
+    bool ap = WiFi.getMode() & WIFI_MODE_AP;
+    if (!sta && !ap) {
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
@@ -105,7 +111,7 @@ void task(void*) {
       srv->on("/wheel", HTTP_POST, onWheel);
       srv->begin();
     }
-    if (WiFi.localIP() != shownIp) {
+    if (sta && WiFi.localIP() != shownIp) {
       shownIp = WiFi.localIP();
       Serial.printf("[panel] przyciski w przegladarce: %s\n", address().c_str());
     }
@@ -116,11 +122,32 @@ void task(void*) {
 
 }  // namespace
 
-void begin() { xTaskCreatePinnedToCore(task, "panel", 4096, nullptr, 1, nullptr, 0); }
+void begin() {
+  Preferences p;
+  p.begin("panel", false);
+  net::setPanelAp(p.getBool("ap", true));  // domyślnie włączona: działa w każdej sieci
+  p.end();
+  xTaskCreatePinnedToCore(task, "panel", 4096, nullptr, 1, nullptr, 0);
+}
+
+void setOwnNetwork(bool on) {
+  Preferences p;
+  p.begin("panel", false);
+  p.putBool("ap", on);
+  p.end();
+  net::setPanelAp(on);
+}
 
 std::string address() {
-  if (WiFi.status() != WL_CONNECTED) return "";
-  return std::string("http://") + WiFi.localIP().toString().c_str() + ":" + std::to_string(PORT);
+  std::string r;
+  if (WiFi.status() == WL_CONNECTED)
+    r = std::string("w sieci domowej: http://") + WiFi.localIP().toString().c_str() + ":" + std::to_string(PORT);
+  if (net::panelAp()) {
+    if (!r.empty()) r += "\n";
+    r += std::string("albo polacz telefon z siecia LUMI-PANEL (haslo ") + identity::apPassword() +
+         ") i otworz http://192.168.4.1:" + std::to_string(PORT);
+  }
+  return r;
 }
 
 }  // namespace panel
@@ -129,6 +156,7 @@ std::string address() {
 
 namespace panel {
 void begin() {}
+void setOwnNetwork(bool) {}
 std::string address() { return ""; }
 }  // namespace panel
 

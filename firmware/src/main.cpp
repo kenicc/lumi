@@ -21,6 +21,23 @@
 #include "net/Ota.h"
 #include "net/Panel.h"
 
+// Ślad pętli głównej w pamięci RTC (przetrwa restart przez strażnika): po zawieszeniu wiadomo,
+// w którym kroku pętla utknęła - bez tego raport strażnika pokazuje tylko "IDLE".
+RTC_NOINIT_ATTR static volatile uint32_t loopStep;
+static const char* const kStepNames[] = {"-", "przyciski", "bateria", "konsola", "logika", "ekran (przed oszczedzaniem)",
+                                         "zmiana taktowania", "ekran", "przerwa"};
+static void step(uint32_t s) { loopStep = 0x4C550000u | s; }  // "LU" + numer: odróżnia ślad od śmieci po zasilaniu
+
+static void reportHang() {
+  if (esp_reset_reason() != ESP_RST_TASK_WDT && esp_reset_reason() != ESP_RST_WDT) return;
+  uint32_t s = loopStep;
+  if ((s & 0xFFFF0000u) != 0x4C550000u) return;
+  s &= 0xFFFF;
+  Serial.printf("[diag] petla glowna zawisla w kroku: %s\n", s < sizeof kStepNames / sizeof kStepNames[0] ? kStepNames[s] : "?");
+  diag::error("[diag] zawieszenie w kroku %u (%s)", (unsigned)s,
+              s < sizeof kStepNames / sizeof kStepNames[0] ? kStepNames[s] : "?");
+}
+
 // Po wybudzeniu przyciskiem: włącz dopiero po przytrzymaniu (przypadkowe naciśnięcie w torbie nie włącza)
 static void requireHoldToPowerOn() {
   if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT0) return;
@@ -48,6 +65,7 @@ void setup() {
   }
 
   diag::begin();
+  reportHang();
   bus::begin();
   display::begin();
   input::begin();
@@ -67,18 +85,26 @@ void setup() {
 static bool lowPower = false;
 
 void loop() {
+  step(1);
   input::poll();
+  step(2);
   battery::poll();
+  step(3);
   console::poll();
+  step(4);
   app::loop();
 
   bool idle = app::canSlowDown();
   if (idle != lowPower) {
     lowPower = idle;
+    step(5);
     if (lowPower) display::tick();  // dokończ ostatnią klatkę, zanim przestaniemy odświeżać
+    step(6);
     setCpuFrequencyMhz(lowPower ? 80 : 240);
   }
+  step(7);
   if (!lowPower) display::tick();
   esp_task_wdt_reset();
+  step(8);
   delay(lowPower ? 20 : 5);
 }
