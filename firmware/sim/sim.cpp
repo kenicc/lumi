@@ -315,20 +315,20 @@ int main() {
   shot("04_radio_gra");
 
   key(Key::Home);
-  key(Key::Mid);  // bez etykiet: środkowy boczny przycisk na zegarze = pogoda
+  key(Key::Bottom);  // zegar bez etykiet: dolny boczny = pogoda
   shot("05_pogoda");
-  check(D::scr == Screen::Weather, "srodkowy boczny na zegarze pokazuje pogode");
+  check(D::scr == Screen::Weather, "dolny boczny na zegarze pokazuje pogode");
 
-  // szybkie wybieranie z zegara istnieje tylko z etykietami (tryb jednego przycisku, starsze warianty)
   key(Key::Home);
-  ui::setRailLabels(true);
-  D::render();
-  key(Key::Top);
+  key(Key::Mid);  // zegar bez etykiet: środkowy boczny = dzwonienie (kontakty)
+  check(D::scr == Screen::Contacts, "srodkowy boczny na zegarze otwiera kontakty");
+  check(ui::railLabels(), "poza zegarem etykiety przyciskow sa widoczne");
+  // ekran potwierdzenia (szybkie wybieranie w trybie jednego przycisku)
+  D::confirmIdx = 0;
+  D::go(Screen::Confirm);
   shot("06_potwierdzenie");
-  check(D::scr == Screen::Confirm, "szybkie wybieranie pyta o potwierdzenie");
+  check(D::scr == Screen::Confirm, "ekran potwierdzenia");
   key(Key::Bottom);
-  ui::setRailLabels(false);
-  D::render();
 
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48600100200"));
   run(1200);
