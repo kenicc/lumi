@@ -1,10 +1,10 @@
-import { addMedia, deleteMedia, moveMedia } from "../actions";
+import { addMedia, addPodcast, deleteMedia, moveMedia } from "../actions";
 import { MusicUpload } from "./MusicUpload";
 import { getProfile, requireMember } from "@/lib/access";
 import { currentSettings } from "@/lib/store";
 import { Flash, Top, type SP } from "@/components/ui";
 
-const KIND = { fm: "Radio FM", web: "Radio z internetu", playlist: "Muzyka" } as const;
+const KIND = { fm: "Radio FM", web: "Radio z internetu", playlist: "Muzyka", podcast: "Podcast" } as const;
 
 export default async function Radio({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SP }) {
   const { id } = await params;
@@ -31,6 +31,7 @@ export default async function Radio({ params, searchParams }: { params: Promise<
                 {KIND[m.type]}
                 {m.type === "fm" && ` ${m.freq.toFixed(1).replace(".", ",")} MHz`}
                 {m.type === "playlist" && ` · ${m.urls.length} plików${m.from ? ` · od: ${m.from}` : ""}`}
+                {m.type === "podcast" && ` · najnowszy: ${m.episodes[0]?.title ?? "-"}`}
               </div>
             </div>
             <form action={moveMedia.bind(null, id, i, -1)}><button className="btn small" disabled={i === 0} aria-label="Wyżej">↑</button></form>
@@ -59,6 +60,20 @@ export default async function Radio({ params, searchParams }: { params: Promise<
           <label htmlFor="url">Adres strumienia (MP3 lub AAC)</label>
           <input id="url" name="url" type="url" required placeholder="http://..." />
           <p className="dim small">Radio internetowe gra przez Wi-Fi.</p>
+          <button className="btn primary block" style={{ marginTop: 12 }}>Dodaj</button>
+        </form>
+      </details>
+      <details className="card">
+        <summary>Dodaj podcast</summary>
+        <form action={addPodcast.bind(null, id)}>
+          <label htmlFor="pname">Nazwa</label>
+          <input id="pname" name="name" type="text" required maxLength={40} placeholder="np. Dwójka - audycje" />
+          <label htmlFor="feed">Adres kanału RSS</label>
+          <input id="feed" name="feed" type="url" required placeholder="https://..." />
+          <p className="dim small">
+            LUMI zagra {5} najnowszych odcinków, od najnowszego. Nowe odcinki pojawią się same (sprawdzamy co kilka godzin).
+            Adres RSS znajdziesz na stronie podcastu albo w serwisie z podcastami (np. przycisk &quot;RSS&quot;).
+          </p>
           <button className="btn primary block" style={{ marginTop: 12 }}>Dodaj</button>
         </form>
       </details>

@@ -24,6 +24,13 @@ export const MediaSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fm"), name, freq: z.number().min(76).max(108) }),
   z.object({ type: z.literal("web"), name, url: httpUrl }),
   z.object({ type: z.literal("playlist"), name, from: z.string().max(24).optional(), urls: z.array(httpUrl).min(1).max(100) }),
+  // Podcast: rodzina podaje kanał RSS, serwer wyciąga najnowsze odcinki (src/lib/podcast.ts) i sam je odświeża
+  z.object({
+    type: z.literal("podcast"),
+    name,
+    feed: httpUrl,
+    episodes: z.array(z.object({ title: z.string().max(80), url: httpUrl })).min(1).max(10),
+  }),
 ]);
 
 export const ReminderSchema = z.object({

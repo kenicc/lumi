@@ -12,7 +12,7 @@ const VERBS = {
 } as const;
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const mediaWord = (m: Media) => (m.type === "playlist" ? "muzykę" : "stację");
+const mediaWord = (m: Media) => (m.type === "playlist" ? "muzykę" : m.type === "podcast" ? "podcast" : "stację");
 const list = (names: string[]) => names.join(", ");
 
 export function pairedText(form: Form) {

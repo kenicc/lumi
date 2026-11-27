@@ -15,7 +15,7 @@ struct Contact {
   std::string photo;          // skrót zdjęcia (16 znaków hex), plik /ph/<skrót>.565
 };
 
-enum class MediaType : uint8_t { Fm, Web, Playlist };
+enum class MediaType : uint8_t { Fm, Web, Playlist, Podcast };
 
 struct Media {
   MediaType type = MediaType::Fm;
@@ -23,6 +23,7 @@ struct Media {
   std::string from;               // "od Ani" - kto dodał (muzyka)
   float freq = 0;                 // MHz, dla FM
   std::vector<std::string> urls;  // strumień lub lista plików MP3
+  std::vector<std::string> titles;  // podcast: tytuły odcinków (od najnowszego), w kolejności urls
 };
 
 enum class SlotKind : uint8_t { None, Contact, Media, Weather };

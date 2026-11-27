@@ -302,9 +302,13 @@ void test_contract() {
   TEST_ASSERT_TRUE(c.contacts[1].photo.empty());
   TEST_ASSERT_EQUAL(0, c.contactIndexByNumber("600 100 200"));
   TEST_ASSERT_EQUAL(cfg::SlotKind::Contact, c.home[0].kind);
-  TEST_ASSERT_EQUAL(3, (int)c.mediaList.size());
+  TEST_ASSERT_EQUAL(4, (int)c.mediaList.size());
   TEST_ASSERT_EQUAL(cfg::MediaType::Playlist, c.mediaList[2].type);
   TEST_ASSERT_EQUAL_STRING("Ania", c.mediaList[2].from.c_str());
+  // podcast: lista odcinków od serwera, bez adresu kanału
+  TEST_ASSERT_EQUAL(cfg::MediaType::Podcast, c.mediaList[3].type);
+  TEST_ASSERT_EQUAL(2, (int)c.mediaList[3].urls.size());
+  TEST_ASSERT_EQUAL_STRING("Odcinek 2", c.mediaList[3].titles[0].c_str());
   TEST_ASSERT_TRUE(c.lockMusic);
   TEST_ASSERT_TRUE(c.inQuietHours(23 * 60));
   TEST_ASSERT_EQUAL(1, (int)c.wifi.size());

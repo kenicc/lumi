@@ -477,9 +477,13 @@ void onKey(Key k, Ev type) {
   }
 
   bool right = k == Key::Top || k == Key::Mid || k == Key::Bottom;
-  // Bez etykiet: na zegarze środkowy boczny przycisk pokazuje pogodę na jutro, górny i dolny nic nie robią
+  // Zegar bez etykiet: środkowy boczny = dzwonienie (kontakty, jak dotąd), dolny = pogoda, górny nic
   if (right && !ui::railLabels() && scr == Screen::Home && !missed.has && call.phase == Phase::None) {
-    if (type == Ev::KeyShort && k == Key::Mid && C.weather) {
+    if (type != Ev::KeyShort) return;
+    if (k == Key::Mid && C.calls && !C.lockCall) {
+      audio::sound(audio::Sound::Key);
+      go(Screen::Contacts);
+    } else if (k == Key::Bottom && C.weather) {
       audio::sound(audio::Sound::Key);
       net::refreshWeather();
       go(Screen::Weather);
@@ -663,7 +667,6 @@ void announceChange() {
 void applyConfig() {
   ui::setTheme(C.textSize, C.highContrast);
   input::configure(C.minPressMs, C.repeatIgnoreMs, C.oneButton);
-  ui::setRailLabels(C.oneButton);  // tryb jednego przycisku potrzebuje widocznego wyróżnienia
   audio::setMaxVolume(C.maxVolume);
   audio::setKeyClick(C.keyClick);
   if (!audio::hasMedia()) modem::ringer(ringLevel());

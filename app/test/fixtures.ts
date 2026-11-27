@@ -11,6 +11,15 @@ export function sample(): Settings {
     { type: "fm", name: "Jedynka", freq: 99.4 },
     { type: "web", name: "Polskie Radio Chopin", url: "http://stream.polskieradio.pl/chopin" },
     { type: "playlist", name: "Piosenki od Ani", from: "Ania", urls: ["https://example.com/a.mp3"] },
+    {
+      type: "podcast",
+      name: "Audycje",
+      feed: "https://feeds.example.com/rss",
+      episodes: [
+        { title: "Odcinek 2", url: "https://cdn.example.com/e2.mp3" },
+        { title: "Odcinek 1", url: "https://cdn.example.com/e1.mp3" },
+      ],
+    },
   ];
   s.weather = { place: "Kraków", lat: 50.06, lon: 19.94 };
   s.access.locked = ["music"];

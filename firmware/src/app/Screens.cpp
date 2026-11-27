@@ -147,7 +147,7 @@ void renderMissed() {
   auto& F = ui::fonts();
   lv_obj_t* col = ui::column(ui::content(), 4);
   ui::label(col, F.body, P.no, IC_PHONE " Nieodebrane", true);
-  int nameH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 32 - 34 - 12;  // nagłówek, godzina, odstępy
+  int nameH = ui::CONTENT_INNER_H - (ui::railLabels() ? 0 : ui::HINT_BAR_H) - 32 - 34 - 12;  // nagłówek, godzina, odstępy
   char name[40];
   int k = C.contactIndexByNumber(missed.number);
   if (k >= 0)
@@ -379,7 +379,8 @@ void renderHome() {
       }
       case cfg::SlotKind::Media:
         if (mediaOn() && !C.mediaList.empty()) {
-          bool music = C.mediaList[mediaIdx].type == cfg::MediaType::Playlist;
+          bool music = C.mediaList[mediaIdx].type == cfg::MediaType::Playlist ||
+                       C.mediaList[mediaIdx].type == cfg::MediaType::Podcast;
           ui::setRail(i, playing ? IC_PAUSE : IC_MUSIC, playing ? "Gra" : (music ? "Muzyka" : "Radio"),
                       playing ? ui::Tone::Accent : ui::Tone::Neutral);
         } else {
@@ -446,16 +447,22 @@ void renderMedia() {
   bool playing = current && as.playing;
 
   lv_obj_t* col = ui::column(ui::content(), 4);
-  const char* icon = m.type == cfg::MediaType::Fm ? IC_RADIO : m.type == cfg::MediaType::Web ? IC_GLOBE : IC_MUSIC;
+  const char* icon = m.type == cfg::MediaType::Fm        ? IC_RADIO
+                     : m.type == cfg::MediaType::Web     ? IC_GLOBE
+                     : m.type == cfg::MediaType::Podcast ? IC_PODCAST
+                                                         : IC_MUSIC;
   ui::label(col, F.iconBig, playing ? P.accent : P.dim, icon);
   ui::label(col, ui::titleFont(m.name.c_str()), P.text, m.name.c_str(), true);
-  char b[64];
+  char b[112];  // tytuł odcinka podcastu do 80 znaków
   if (m.type == cfg::MediaType::Fm) {
     char fr[12];
     fmtFreq(m.freq, fr, sizeof fr);
     snprintf(b, sizeof b, "Radio FM %s", fr);
   } else if (m.type == cfg::MediaType::Web) {
     strlcpy(b, "Radio z internetu", sizeof b);
+  } else if (m.type == cfg::MediaType::Podcast) {
+    // najnowszy odcinek - senior wie, czego posłucha
+    snprintf(b, sizeof b, "Najnowszy: %s", m.titles.empty() ? "odcinek" : m.titles[0].c_str());
   } else if (!m.from.empty()) {
     snprintf(b, sizeof b, "Muzyka od: %s", m.from.c_str());
   } else {
@@ -667,7 +674,7 @@ void renderReminder() {
   lv_obj_set_style_pad_column(row, 10, 0);
   ui::label(row, F.icon, P.accent, IC_BELL);
   ui::label(row, F.title, P.accent, t);
-  int textH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 44;  // pod godziną, nad paskiem podpowiedzi
+  int textH = ui::CONTENT_INNER_H - (ui::railLabels() ? 0 : ui::HINT_BAR_H) - 44;  // pod godziną, nad paskiem podpowiedzi
   ui::label(col, ui::fitFont(r.text.c_str(), ui::contentInnerW(), textH), P.text, r.text.c_str(), true);
   ui::setRail(0, IC_CHECK, "Zrobione", ui::Tone::Yes);
   ui::hideRail(1);
@@ -683,7 +690,7 @@ void renderMessage() {
   std::string head = std::string(IC_USER " ") + m.author;
   ui::label(col, F.body, P.accent, head.c_str(), true);
   // największy krój, w którym cały tekst mieści się nad paskiem podpowiedzi
-  int textH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 32 - 26 - 8;
+  int textH = ui::CONTENT_INNER_H - (ui::railLabels() ? 0 : ui::HINT_BAR_H) - 32 - 26 - 8;
   ui::label(col, ui::fitFont(m.text.c_str(), ui::contentInnerW(), textH), P.text, m.text.c_str(), true);
   if (m.at > 1700000000) {
     time_t t = (time_t)m.at;
@@ -752,7 +759,6 @@ void updateLive() {
 // Bez etykiet na ekranie decyzje podejmuje się dolnymi przyciskami: zielony Dzwoń = tak / odbierz /
 // zadzwoń, Dom = nie / odrzuć / rozłącz / później. Boczne przyciski zostają: góra / OK / dół.
 int bottomSlot(Key k) {
-  if (ui::railLabels()) return -1;
   bool callKey = k == Key::Call, homeKey = k == Key::Home;
   if (!callKey && !homeKey) return -1;
   if (call.phase == Phase::Incoming) return callKey ? 0 : 2;
@@ -778,6 +784,11 @@ void showHints() {
 
 void render() {
   live = nullptr;
+  // Etykiety przycisków na każdym ekranie oprócz zegara (tam ma być czysto: godzina, data, pogoda).
+  // Tryb jednego przycisku zawsze z etykietami - wyróżnienie musi być widać.
+  bool cleanHome = call.phase == Phase::None && !missed.has &&
+                   (scr == Screen::Home || (scr == Screen::Message && inbox.empty()));
+  ui::setRailLabels(C.oneButton || !cleanHome);
   ui::clearContent();
   // tło testowe tylko pod zegarem i nie w wysokim kontraście (tam liczy się wyłącznie czytelność)
   const void* bg = nullptr;
