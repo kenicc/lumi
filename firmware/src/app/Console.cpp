@@ -12,6 +12,7 @@
 #include "../audio/AudioOut.h"
 #include "../hw/Battery.h"
 #include "../hw/Display.h"
+#include "../hw/Rtc.h"
 #include "../hw/Input.h"
 #include "../modem/Modem.h"
 #include "../net/Identity.h"
@@ -83,6 +84,17 @@ void status() {
   Serial.printf("urzadzenie: %s (%s), oprogramowanie %s (build %d)\n", app::deviceId(), LUMI_VARIANT, LUMI_FW_VERSION,
                 LUMI_FW_BUILD);
   Serial.printf("uruchomienie %u, ostatni restart: %s\n", diag::bootCount(), diag::resetReason());
+  {
+    time_t t = time(nullptr);
+    tm l;
+    localtime_r(&t, &l);
+    if (t > 1700000000)
+      Serial.printf("godzina: %02d:%02d:%02d %02d.%02d.%d, zegar z bateria DS3231: %s\n", l.tm_hour, l.tm_min, l.tm_sec,
+                    l.tm_mday, l.tm_mon + 1, l.tm_year + 1900, rtc::present() ? "jest" : "brak");
+    else
+      Serial.printf("godzina: nieustawiona (czeka na Wi-Fi albo siec komorkowa), DS3231: %s\n",
+                    rtc::present() ? "jest, bez czasu" : "brak");
+  }
   for (const auto& e : diag::recent()) Serial.printf("  blad: %s\n", e.c_str());
   Serial.printf("modem: %s, %s %s, fw %s\n", s.ready ? "gotowy" : "nie gotowy", modem::vendorName(s.vendor), s.model,
                 s.fw);

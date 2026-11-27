@@ -203,3 +203,20 @@ Wariant allegro zakłada płytkę z diodą RGB na GPIO48 (np. YD-ESP32-S3 z dwom
 ## Co dalej
 
 Gdy oba etapy działają, kolejny krok to przeniesienie na płytkę uniwersalną (lutowaną) i obudowę. Wtedy dochodzi TP4056 do ładowania i stabilizator 3,3 V, żeby całość działała bez kabla USB.
+
+## Zegar z baterią DS3231 (opcjonalny)
+
+Bez niego LUMI zna godzinę dopiero po połączeniu z Wi-Fi albo z siecią komórkową, a po odłączeniu zasilania pokazuje `--:--`. Z modułem DS3231 godzina jest od razu po włączeniu, także bez internetu i zasięgu. Moduł spóźnia się najwyżej o około minutę na rok, a LUMI poprawia go przy każdej synchronizacji z siecią.
+
+Kup moduł `DS3231 mini` (mały, do Raspberry Pi) z baterią CR2032.
+
+| Pin DS3231 | ESP32 |
+| --- | --- |
+| VCC (+) | 3V3 |
+| GND (−) | GND |
+| SDA (D) | 4 |
+| SCL (C) | 5 |
+
+Duży moduł ZS-042 też zadziała. Przy zasilaniu z 3V3 jego układ ładowania baterii nie jest groźny, ale włóż do niego baterię CR2032, a nie akumulatorek LIR2032.
+
+Sprawdzenie: polecenie `status` w konsoli pokazuje `zegar z bateria DS3231: jest`. Przy pierwszym uruchomieniu moduł nie ma jeszcze czasu, więc ustawi się po pierwszym połączeniu z Wi-Fi.

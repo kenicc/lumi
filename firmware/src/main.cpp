@@ -18,6 +18,7 @@
 #include "hw/Board.h"
 #include "hw/Display.h"
 #include "hw/Input.h"
+#include "hw/Rtc.h"
 #include "net/Ota.h"
 #include "net/Panel.h"
 
@@ -67,6 +68,7 @@ void setup() {
   diag::begin();
   reportHang();
   bus::begin();
+  rtc::begin();  // godzina z zegara z baterią (jeśli jest) - zanim cokolwiek pokaże czas
   display::begin();
   input::begin();
   battery::begin();

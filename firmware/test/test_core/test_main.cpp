@@ -11,6 +11,7 @@
 #include "core/Config.h"
 #include "core/Pairing.h"
 #include "core/ReminderQueue.h"
+#include "core/RtcCodec.h"
 #include "core/Weather.h"
 
 void setUp() {}
@@ -316,6 +317,35 @@ void test_contract() {
   TEST_ASSERT_FALSE(c.reminders[1].confirm);
 }
 
+// --- zegar DS3231 ---
+
+static void test_rtc_codec() {
+  // 2026-11-27 13:45:07 UTC
+  int64_t t = at::daysFromCivil(2026, 11, 27) * 86400 + 13 * 3600 + 45 * 60 + 7;
+  uint8_t r[7];
+  rtcc::encode(t, r);
+  TEST_ASSERT_EQUAL_HEX8(0x07, r[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x45, r[1]);
+  TEST_ASSERT_EQUAL_HEX8(0x13, r[2]);
+  TEST_ASSERT_EQUAL_HEX8(0x27, r[4]);
+  TEST_ASSERT_EQUAL_HEX8(0x11, r[5]);
+  TEST_ASSERT_EQUAL_HEX8(0x26, r[6]);
+  TEST_ASSERT_EQUAL(6, r[3]);  // piątek (niedziela = 1)
+  int64_t back = 0;
+  TEST_ASSERT_TRUE(rtcc::decode(r, back));
+  TEST_ASSERT_EQUAL_INT64(t, back);
+  // przełom roku i rok przestępny
+  int64_t leap = at::daysFromCivil(2028, 2, 29) * 86400 + 23 * 3600 + 59 * 60 + 59;
+  rtcc::encode(leap, r);
+  TEST_ASSERT_TRUE(rtcc::decode(r, back));
+  TEST_ASSERT_EQUAL_INT64(leap, back);
+  // nowy moduł (2000-01-01) i śmieci są odrzucane
+  uint8_t fresh[7] = {0, 0, 0, 1, 1, 1, 0};
+  TEST_ASSERT_FALSE(rtcc::decode(fresh, back));
+  uint8_t junk[7] = {0x99, 0x99, 0x99, 9, 0x99, 0x99, 0x99};
+  TEST_ASSERT_FALSE(rtcc::decode(junk, back));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_button_short_after_debounce);
@@ -338,5 +368,6 @@ int main() {
   RUN_TEST(test_reminders);
   RUN_TEST(test_reminder_queue);
   RUN_TEST(test_contract);
+  RUN_TEST(test_rtc_codec);
   return UNITY_END();
 }
