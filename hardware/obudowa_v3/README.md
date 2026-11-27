@@ -12,14 +12,16 @@ Obudowa jest dopasowana do **części, a nie do interfejsu**. Interfejs nie ma j
 
 | Element | Skąd wymiar |
 | --- | --- |
-| **Moduł ekranu 86 x 50 mm** | przy lewej i górnej ścianie, luz 0,5 mm; 4 słupki pod jego otwory, szkło w gnieździe 0,6 mm we froncie |
+| **Moduł ekranu 81 x 55 mm** (aukcja Allegro, oferta 18880632600: ST7789, 9 pin, wysokość modułu 7 mm) | przy lewej i górnej ścianie, luz 0,5 mm; szkło w gnieździe 0,6 mm we froncie. **Mocowanie bez otworów:** 4 kątowniki we froncie ustawiają płytkę, 4 słupki z tylnej ścianki dociskają jej narożniki |
 | **Prawa kolumna** (3 otwory 19 x 16,13) | **obok** płytki ekranu, nie nad nią, bo nasadka nie może naciskać na płytkę; 1,5 mm od krawędzi płytki |
 | **Dolny rząd** (3 otwory 30,33 x 14) | pod ekranem, na całą szerokość |
-| **Szerokość** | wynika z części: 2 ściany + płytka 86 mm + kolumna z kołnierzami = **113 mm** (w v2.2 było 105, a moduł 86 mm się nie mieścił) |
+| **Szerokość** | wynika z części: 2 ściany + płytka 81 mm + kolumna z kołnierzami = **108 mm** (w v2.2 było 105, a moduł z kolumną obok się nie mieścił) |
 | **Wysokość** | **80 mm**, jak w v2.2; mieści kolumnę i dolny rząd z 3 mm zapasu |
 | Mikrofon i dioda | w wolnym pasie między kolumną a dolnym rzędem |
 
-**Obudowa: 113 x 80 mm**, grubość 22,5 mm (wariant docelowy) albo 37 mm (prototyp).
+**Obudowa: 108 x 80 mm**, grubość 22,5 mm (wariant docelowy) albo 37 mm (prototyp).
+
+**Założenie do sprawdzenia:** aukcja nie podaje, gdzie na płytce jest świecący obraz. Model zakłada, że obraz jest **na środku płytki**. Jeśli jest przesunięty (np. w stronę przeciwną do pinów), okno trzeba przesunąć. Zmierz C i D z tabeli poniżej i popraw `aktywny_off`.
 
 Z v2.2 zostało bez zmian:
 - narożniki R8, front 15 mm, płyta 2 mm, ściany 1,8 mm, zaokrąglona przednia krawędź;
@@ -33,12 +35,12 @@ Z v2.2 zostało bez zmian:
 
 Moduły 2,8" różnią się między producentami. Popraw sekcję `moduł ekranu` na początku `lumi_v3.scad`:
 
-| Parametr | Co zmierzyć | Domyślnie |
+| Parametr | Co zmierzyć | Teraz w modelu |
 | --- | --- | --- |
-| `ekran_pcb` | płytka: szerokość x wysokość (piny po lewej) | 86 x 50 |
-| `ekran_lcd_t` | od wierzchu płytki do wierzchu szkła | 4,2 |
-| `aktywny_off` | od lewego dolnego rogu płytki do lewego dolnego rogu świecącego obrazu | 14,2 / 3,4 |
-| `ekran_otwory` | środki 4 otworów montażowych od lewego dolnego rogu płytki | 3/3, 83/3, 3/47, 83/47 |
+| `ekran_pcb` | płytka: szerokość x wysokość (piny po lewej) | 81 x 55 (z aukcji) |
+| `aktywny_off` (C, D) | od lewego dolnego rogu płytki do lewego dolnego rogu świecącego obrazu | 11,7 / 5,9 (założony środek) |
+| `ekran_lcd_t` | od wierzchu płytki do wierzchu szkła | 4,2 (typowe) |
+| `ekran_otwory` | środki otworów od lewego dolnego rogu płytki | puste = mocowanie bez otworów |
 
 Szerokość, okno, kolumna i otwory przeliczą się same. Gdy coś na siebie nachodzi, OpenSCAD wypisze `UWAGA: ...`. Możesz też podać mi te wymiary, a przeliczę model.
 
@@ -65,9 +67,9 @@ Szerokość, okno, kolumna i otwory przeliczą się same. Gdy coś na siebie nac
 
 ## Składanie
 
-1. Włóż nasadki od środka frontu. Moduł ekranu włóż szkłem w gniazdo frontu i przykręć do 4 słupków wkrętami M2,5 x 6.
+1. Włóż nasadki od środka frontu. Moduł ekranu włóż szkłem w gniazdo frontu, między 4 kątowniki. Po zamknięciu tylnej ścianki słupki dociskają narożniki płytki.
 2. Przyciski 12 x 12 przylutuj do dwóch pasków płytki uniwersalnej, w położeniach otworów (patrząc od frontu, środek obudowy w 0,0):
-   - prawa kolumna: x 42,8, y 28,6 / 9,5 / -9,6;
+   - prawa kolumna: x 40,3, y 28,6 / 9,5 / -9,6;
    - dolny rząd: y -29,7, x -33,3 / 0 / 33,3.
 
    W pasku prawej kolumny **zetnij prawy górny róg** (około 8 x 8 mm), bo jest tam słupek wkrętu.

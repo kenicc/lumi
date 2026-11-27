@@ -11,13 +11,20 @@ czesc = "zlozenie";
 wariant = "prototyp";            // "docelowy": tył 7,5 mm jak w v2.2 | "prototyp": głębszy tył na moduły
 $fn = 56;
 
-// ---------- moduł ekranu (ZMIERZ swój i popraw) ----------
-ekran_pcb = [86.0, 50.0];        // płytka modułu 2,8" SPI, poziomo, piny po lewej
-ekran_lcd_t = 4.2;               // od wierzchu płytki do wierzchu szkła
-aktywny = [57.6, 43.2];          // świecący obraz
-aktywny_off = [14.2, 3.4];       // lewy-dolny róg obrazu od lewego-dolnego rogu płytki
-ekran_otwory = [[3.0, 3.0], [83.0, 3.0], [3.0, 47.0], [83.0, 47.0]];  // od lewego-dolnego rogu płytki
-ekran_otwor_d = 2.2;             // wkręt M2,5 samogwintujący
+// ---------- moduł ekranu ----------
+// Aukcja Allegro "Wyświetlacz LCD TFT 2,8 240x320 SPI 9 pin ST7789" (oferta 18880632600):
+// płytka 81 x 55 mm, wysokość modułu 7 mm. Położenia obrazu na płytce aukcja nie podaje -
+// do czasu pomiaru zakładam obraz na środku płytki (ZMIERZ: aktywny_off).
+ekran_pcb = [81.0, 55.0];        // płytka modułu, poziomo, piny po lewej
+ekran_pcb_t = 1.6;
+ekran_lcd_t = 4.2;               // od wierzchu płytki do wierzchu szkła (typowe dla 2,8")
+ekran_modul_h = 7.0;             // cały moduł z elementami z tyłu (z aukcji) - zapas głębokości
+aktywny = [57.6, 43.2];          // świecący obraz 2,8" 320x240 (zgodnie u wszystkich producentów)
+aktywny_off = [(81.0 - 57.6) / 2, (55.0 - 43.2) / 2];   // ZAŁOŻENIE: obraz na środku płytki
+// Otwory montażowe: puste = mocowanie bez otworów (narożne kątowniki we froncie + dociski z tyłu).
+// Po zmierzeniu można wpisać np. [[3, 3], [78, 3], [3, 52], [78, 52]] - wtedy słupki pod wkręty.
+ekran_otwory = [];
+ekran_otwor_d = 2.2;             // wkręt M2,5 samogwintujący (gdy otwory podane)
 pcb_luz = 0.5;                   // luz płytki do ścian i do kołnierzy przycisków
 
 // ---------- styl i przyciski z projektu v2.2 ----------
@@ -108,8 +115,20 @@ module przod_uklad() {
       kol_dol = kol_y[2] - kol_h / 2 - 2; kol_gora = kol_y[0] + kol_h / 2 + 1;
       translate([W / 2 - sciana - 2.2, kol_dol, plytka_z - 3]) cube([2.2, kol_gora - kol_dol - 6, 3]);  // bez narożnika (słupek wkrętu)
       translate([-(W / 2 - 9), -H / 2 + sciana, plytka_z - 3]) cube([W - 18, 2.2, 3]);
-      // słupki modułu ekranu: płytka leży na nich, szkło w gnieździe frontu
+      // słupki modułu ekranu (gdy znane otwory) albo narożne kątowniki ustawiające płytkę
       for (o = ekran_otwory) translate([pcb_x0 + o[0], pcb_y0 + o[1], plyta]) cylinder(h = ekran_lcd_t - 0.6, d = 5.5);
+      if (len(ekran_otwory) == 0)
+        for (cx = [0, 1], cy = [0, 1]) {
+          x = pcb_x0 + cx * ekran_pcb[0]; y = pcb_y0 + cy * ekran_pcb[1];
+          sx = cx == 0 ? -1 : 1; sy = cy == 0 ? -1 : 1;
+          h = ekran_lcd_t - 0.6 + ekran_pcb_t;  // do tylnej powierzchni płytki
+          // prawe kątowniki bez części przy prawej krawędzi: tam od środka są kołnierze nasadek kolumny
+          difference() {
+            translate([x + sx * 0.3, y + sy * 0.3, plyta]) mirror([cx, 0, 0]) mirror([0, cy, 0])
+              translate([-1.6, -1.6, 0]) difference() { cube([8, 8, h]); translate([1.6, 1.6, -0.1]) cube([8, 8, h + 0.2]); }
+            if (cx == 1) translate([pcb_x0 + ekran_pcb[0] - 0.5, -H, 0]) cube([20, 2 * H, przod_h]);
+          }
+        }
     }
     translate([okno_c[0], okno_c[1], -0.1]) linear_extrude(plyta + 0.2) zaokr2d(okno, r_okno);
     for (y = kol_y) translate([kol_x, y, -0.1]) linear_extrude(plyta + 0.2) zaokr2d([kol_w, kol_h], r_otwor);
@@ -119,6 +138,8 @@ module przod_uklad() {
     for (x = kratka_x) translate([x, -H / 2 + sciana / 2, wyc_z]) rotate([0, 0, 90]) szczelina(wyc_h, kratka_w);
     for (s = sruby) translate([s[0], s[1], przod_h - 6.1]) cylinder(h = 6.2, d = 2.6);  // M3 samogwintujący
     for (o = ekran_otwory) translate([pcb_x0 + o[0], pcb_y0 + o[1], plyta]) cylinder(h = ekran_lcd_t, d = ekran_otwor_d);
+    // kątowniki nie mogą wchodzić w okno ani w otwory przycisków (przy dużym przesunięciu obrazu)
+
     // gniazdo na szkło: 0,6 mm w płycie frontu, w obrysie płytki (centruje moduł)
     translate([pcb_x0 - 0.2 + ekran_pcb[0] / 2, pcb_y0 + ekran_pcb[1] / 2, plyta - 0.6]) linear_extrude(0.7)
       difference() {
@@ -152,6 +173,12 @@ module tyl() {
       for (s = sruby) translate([s[0], s[1], 0]) cylinder(h = tyl_h, d = 6.4);
       // dociski płytek z przyciskami: słupki od dna do tylnej strony płytek
       g = przod_h + tyl_h - plytka_z - pcb_t;  // od dna tyłu do płytki
+      // dociski narożników płytki ekranu (gdy mocowanie bez otworów); 3 mm od krawędzi płytki
+      if (len(ekran_otwory) == 0) {
+        ge = przod_h + tyl_h - (plyta - 0.6 + ekran_lcd_t + ekran_pcb_t);
+        for (cx = [0, 1], cy = [0, 1])
+          translate([pcb_x0 + 3 + cx * (ekran_pcb[0] - 6), pcb_y0 + 3 + cy * (ekran_pcb[1] - 6), 0]) cylinder(h = ge, d = 4);
+      }
       for (p = [[kol_x + 6, (kol_y[0] + kol_y[1]) / 2], [kol_x + 6, (kol_y[1] + kol_y[2]) / 2],
                 [(dol_x[0] + dol_x[1]) / 2, dol_y], [(dol_x[1] + dol_x[2]) / 2, dol_y]])
         translate([p[0], p[1], 0]) difference() { cylinder(h = g, d = 5); translate([0, 0, g - 1.5]) cylinder(h = 2, d = 2); }
