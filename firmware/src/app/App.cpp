@@ -785,10 +785,18 @@ void tick() {
     updateLive();
     checkBattery();
     tm l = now_tm();
+    // ikona połączenia: Wi-Fi albo kreski zasięgu - odśwież zegar, gdy się zmieni
+    static int lastConn = -1;
+    modem::Status ms = modem::status();
+    int conn = net::wifiConnected() ? 10 : (ms.registered ? ms.bars : 0);
+    bool connChanged = conn != lastConn;
+    lastConn = conn;
     if (l.tm_min != lastMinute) {
       lastMinute = l.tm_min;
       checkReminders(l);
       if (scr == Screen::Home && call.phase == Phase::None) render();
+    } else if (connChanged && scr == Screen::Home && call.phase == Phase::None) {
+      render();
     }
   }
 }

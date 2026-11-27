@@ -94,10 +94,11 @@ void tone(uint16_t, uint16_t, uint16_t, uint16_t) {}
 void raw(const char*) {}
 void diag() {}
 void bridge(Stream&) {}
+static int simBars = 4;
 Status status() {
   Status s;
   s.ready = s.simOk = s.registered = s.lte = true;
-  s.bars = 4;
+  s.bars = simBars;
   return s;
 }
 const char* vendorName(Vendor) { return "sim"; }
@@ -108,7 +109,8 @@ static net::Cloud cloudSim = net::Cloud::Provisioning;
 namespace net {
 void begin() {}
 void apply(const Settings&) {}
-bool wifiConnected() { return true; }
+static bool simWifi = true;
+bool wifiConnected() { return simWifi; }
 std::string wifiSsid() { return "Dom"; }
 Cloud cloud() { return cloudSim; }
 const char* cloudName(Cloud) { return ""; }
@@ -292,6 +294,14 @@ int main() {
   bus::post(Event(Ev::ModemReady, 1));
   shot("01_ekran_glowny");
   check(D::scr == Screen::Home, "po konfiguracji: ekran główny");
+  // bez Wi-Fi: ikona połączenia pokazuje kreski zasięgu komórkowego
+  net::simWifi = false;
+  modem::simBars = 2;
+  bus::post(Event(Ev::NetTime));
+  shot("01b_bez_wifi_zasieg_komorkowy");
+  net::simWifi = true;
+  modem::simBars = 4;
+  bus::post(Event(Ev::NetTime));
 
   key(Key::Call);
   shot("02_kontakty");

@@ -67,7 +67,8 @@ display::Tweaks tweaks;
 
 void loadTweaks() {
   Preferences p;
-  if (!p.begin("lcd", true)) return;  // brak przestrzeni = ustawienia domyślne
+  // tryb zapisu: tworzy pustą przestrzeń przy pierwszym starcie (tryb odczytu wypisywał wtedy błąd NVS)
+  if (!p.begin("lcd", false)) return;
   tweaks.invert = p.getBool("inv", false);
   tweaks.flip = p.getBool("flip", false);
   tweaks.bgr = p.getBool("bgr", false);

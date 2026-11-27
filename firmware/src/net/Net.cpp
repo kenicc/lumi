@@ -60,6 +60,23 @@ constexpr uint32_t PROVISION_AFTER_MS = 90UL * 1000;  // nieskonfigurowane i nie
 // to kilka sekund pracy radia, a radio Wi-Fi to największy pobór prądu po ekranie. Kolejne próby co
 // 15 s, 30 s, 1 min... do 5 min, radio wyłączone pomiędzy. Po powrocie do domu połączy się najpóźniej po 5 min.
 uint8_t wifiFails = 0;
+bool listOnFail = true;  // po zmianie sieci: przy pierwszej porażce pokaż, co LUMI widzi w eterze
+
+// Najczęstsze przyczyny "no matching wifi": sieć 5 GHz (ESP32 widzi tylko 2,4 GHz), literówka
+// w nazwie (wielkość liter ma znaczenie), wyłączony hotspot w telefonie.
+void listVisibleNetworks(const std::vector<cfg::Wifi>& known) {
+  int n = WiFi.scanNetworks();
+  if (n <= 0) {
+    Serial.println("[wifi] LUMI nie widzi zadnej sieci 2,4 GHz w poblizu");
+    return;
+  }
+  Serial.print("[wifi] szukam:");
+  for (const auto& w : known) Serial.printf(" \"%s\"", w.ssid.c_str());
+  Serial.printf("\n[wifi] LUMI widzi %d sieci (tylko 2,4 GHz; wielkosc liter ma znaczenie):\n", n);
+  for (int i = 0; i < n && i < 15; i++)
+    Serial.printf("[wifi]   \"%s\"  sygnal %d dBm\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
+  WiFi.scanDelete();
+}
 uint32_t wifiRetryAt = 0;
 constexpr uint8_t WIFI_QUICK_TRIES = 3;
 constexpr uint32_t WIFI_BACKOFF_MAX_MS = 5UL * 60 * 1000;
@@ -580,6 +597,7 @@ void task(void*) {
     xSemaphoreGive(mtx);
     if (dirty) {
       rebuildWifi(s);
+      listOnFail = true;
       wifiFails = 0;  // nowa sieć od rodziny: próbuj od razu
       wifiRetryAt = 0;
     }
@@ -611,6 +629,10 @@ void task(void*) {
     }
     if (multi->run(5000) != WL_CONNECTED) {
       setCloud(Cloud::Connecting);
+      if (listOnFail) {
+        listOnFail = false;
+        listVisibleNetworks(nets);
+      }
       if (unconfigured) {
         if (millis() - connectingSince > PROVISION_AFTER_MS) startAp();  // np. złe hasło
         continue;
