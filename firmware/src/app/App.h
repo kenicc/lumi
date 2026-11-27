@@ -3,8 +3,8 @@
 // Działa w zadaniu głównym (rdzeń 0) - jedyne miejsce, które dotyka LVGL.
 #include <stdint.h>
 
-#include "app/Events.h"
-#include "core/Config.h"
+#include "Events.h"
+#include "../core/Config.h"
 
 namespace app {
 

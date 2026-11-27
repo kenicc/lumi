@@ -1,4 +1,8 @@
-#include "audio/AudioOut.h"
+#include "../BuildConfig.h"
+// Pełny tor dźwięku (DAC, radio FM). Wariant allegro używa AudioModem.cpp - ten plik jest wtedy pusty,
+// żeby Arduino IDE (kompiluje wszystkie pliki) nie dublowało funkcji ani nie szukało bibliotek audio.
+#ifndef LUMI_AUDIO_MODEM
+#include "AudioOut.h"
 
 #include <Arduino.h>
 #include <Audio.h>
@@ -7,8 +11,8 @@
 #include <WiFi.h>
 #include <Wire.h>
 
-#include "app/Events.h"
-#include "hw/Board.h"
+#include "../app/Events.h"
+#include "../hw/Board.h"
 
 namespace audio {
 
@@ -327,3 +331,5 @@ bool hasMedia() { return true; }
 // Funkcje zwrotne biblioteki ESP32-audioI2S (wywoływane z zadania audio)
 void audio_eof_mp3(const char*) { audio::eof = true; }
 void audio_eof_stream(const char*) { audio::eof = true; }
+
+#endif

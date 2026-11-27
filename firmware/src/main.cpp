@@ -4,6 +4,7 @@
 //   rdzeń 0: pętla główna (interfejs LVGL, przyciski, logika), sieć (Wi-Fi, pogoda, konfiguracja)
 //   rdzeń 1: modem (rozmowy), audio (radio, muzyka, dzwonek)
 // Interfejs nigdy nie blokuje rozmowy ani dźwięku: modem i audio tylko wysyłają zdarzenia.
+#include "BuildConfig.h"
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_sleep.h>

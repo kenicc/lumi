@@ -1,4 +1,5 @@
 #pragma once
+#include "../BuildConfig.h"
 // Piny ESP32-S3 DevKitC-1 N16R8 - zgodnie z tabelą w dokumentacji v2.0.
 // Przed lutowaniem sprawdź pinout swojej wersji DevKitu: v1.0 ma diodę RGB na GPIO48, v1.1 na GPIO38.
 // Ustaw LUMI_DEVKIT_V10, jeśli masz v1.0.

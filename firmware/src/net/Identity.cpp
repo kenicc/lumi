@@ -1,4 +1,5 @@
-#include "net/Identity.h"
+#include "../BuildConfig.h"
+#include "Identity.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>

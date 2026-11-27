@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "core/Config.h"
-#include "core/Weather.h"
+#include "../core/Config.h"
+#include "../core/Weather.h"
 
 namespace net {
 

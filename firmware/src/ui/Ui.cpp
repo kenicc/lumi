@@ -1,9 +1,9 @@
-#include "ui/Ui.h"
+#include "Ui.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#include "ui/Icons.h"
+#include "Icons.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_b24);

@@ -1,4 +1,4 @@
-#include "net/Ota.h"
+#include "Ota.h"
 
 #include <Arduino.h>
 #include <HTTPClient.h>
@@ -10,9 +10,9 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-#include "Version.h"
-#include "app/Diag.h"
-#include "net/ota_pubkey.h"
+#include "../Version.h"
+#include "../app/Diag.h"
+#include "ota_pubkey.h"
 
 extern "C" const uint8_t lumi_ca_bundle[];
 

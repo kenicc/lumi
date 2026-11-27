@@ -1,12 +1,12 @@
-#include "modem/Modem.h"
+#include "Modem.h"
 
 #include <Arduino.h>
 #include <sys/time.h>
 
-#include "app/Diag.h"
-#include "app/Events.h"
-#include "core/AtParse.h"
-#include "hw/Board.h"
+#include "../app/Diag.h"
+#include "../app/Events.h"
+#include "../core/AtParse.h"
+#include "../hw/Board.h"
 
 namespace modem {
 

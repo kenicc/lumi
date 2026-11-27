@@ -1,4 +1,5 @@
-#include "app/App.h"
+#include "../BuildConfig.h"
+#include "App.h"
 
 #include <Arduino.h>
 #include <LittleFS.h>
@@ -14,24 +15,24 @@
 #include <map>
 #include <string>
 
-#include "app/Diag.h"
-#include "app/SelfTest.h"
-#include "app/State.h"
-#include "audio/AudioOut.h"
-#include "core/AtParse.h"
-#include "core/Calendar.h"
-#include "core/Pairing.h"
-#include "core/ReminderQueue.h"
-#include "hw/Battery.h"
-#include "hw/Board.h"
-#include "hw/Display.h"
-#include "hw/Input.h"
-#include "modem/Modem.h"
-#include "net/Identity.h"
-#include "net/Ota.h"
-#include "net/Net.h"
-#include "ui/Icons.h"
-#include "ui/Ui.h"
+#include "Diag.h"
+#include "SelfTest.h"
+#include "State.h"
+#include "../audio/AudioOut.h"
+#include "../core/AtParse.h"
+#include "../core/Calendar.h"
+#include "../core/Pairing.h"
+#include "../core/ReminderQueue.h"
+#include "../hw/Battery.h"
+#include "../hw/Board.h"
+#include "../hw/Display.h"
+#include "../hw/Input.h"
+#include "../modem/Modem.h"
+#include "../net/Identity.h"
+#include "../net/Ota.h"
+#include "../net/Net.h"
+#include "../ui/Icons.h"
+#include "../ui/Ui.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);

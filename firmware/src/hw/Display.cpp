@@ -1,4 +1,5 @@
-#include "hw/Display.h"
+#include "../BuildConfig.h"
+#include "Display.h"
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -8,7 +9,7 @@
 #include <LovyanGFX.hpp>
 #include <lvgl.h>
 
-#include "hw/Board.h"
+#include "Board.h"
 
 namespace {
 

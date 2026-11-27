@@ -1,4 +1,4 @@
-#include "core/Pairing.h"
+#include "Pairing.h"
 
 namespace pairing {
 

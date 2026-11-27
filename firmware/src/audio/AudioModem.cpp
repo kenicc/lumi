@@ -2,11 +2,13 @@
 // Głośnik 8 Ω i mikrofon elektretowy są podłączone do SIM800L (SPK+/-, MIC+/-),
 // więc dzwonek gra modem (głośność AT+CRSL), a sygnały interfejsu to tony AT+SIMTONE.
 // Ten sam interfejs co AudioOut.cpp - reszta oprogramowania nie wie, który wariant działa.
+#include "../BuildConfig.h"
+#ifdef LUMI_AUDIO_MODEM
 #include <Arduino.h>
 
-#include "app/Events.h"
-#include "audio/AudioOut.h"
-#include "modem/Modem.h"
+#include "../app/Events.h"
+#include "AudioOut.h"
+#include "../modem/Modem.h"
 
 namespace audio {
 
@@ -64,3 +66,5 @@ bool fmActive() { return false; }
 bool hasMedia() { return false; }
 
 }  // namespace audio
+
+#endif

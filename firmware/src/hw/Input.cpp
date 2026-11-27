@@ -1,9 +1,9 @@
-#include "hw/Input.h"
+#include "Input.h"
 
 #include <Arduino.h>
 #include <string.h>
 
-#include "hw/Board.h"
+#include "Board.h"
 
 namespace input {
 

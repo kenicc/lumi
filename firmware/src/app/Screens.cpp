@@ -1,22 +1,23 @@
 // Ekrany LUMI: co jest na ekranie w danym stanie (bez logiki przycisków i zdarzeń - ta jest w App.cpp).
+#include "../BuildConfig.h"
 #include <Arduino.h>
 #include <LittleFS.h>
 
 #include <map>
 #include <string>
 
-#include "app/State.h"
-#include "audio/AudioOut.h"
-#include "core/AtParse.h"
-#include "core/Calendar.h"
-#include "core/Pairing.h"
-#include "core/Weather.h"
-#include "hw/Battery.h"
-#include "modem/Modem.h"
-#include "net/Identity.h"
-#include "net/Net.h"
-#include "ui/Icons.h"
-#include "ui/Ui.h"
+#include "State.h"
+#include "../audio/AudioOut.h"
+#include "../core/AtParse.h"
+#include "../core/Calendar.h"
+#include "../core/Pairing.h"
+#include "../core/Weather.h"
+#include "../hw/Battery.h"
+#include "../modem/Modem.h"
+#include "../net/Identity.h"
+#include "../net/Net.h"
+#include "../ui/Icons.h"
+#include "../ui/Ui.h"
 
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);

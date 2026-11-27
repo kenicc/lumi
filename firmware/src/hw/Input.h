@@ -1,7 +1,7 @@
 #pragma once
 // Przyciski i rolka głośności. Wysyła zdarzenia Key*/Wheel do kolejki.
-#include "app/Events.h"
-#include "core/ButtonFilter.h"
+#include "../app/Events.h"
+#include "../core/ButtonFilter.h"
 
 namespace input {
 

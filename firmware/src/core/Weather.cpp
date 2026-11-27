@@ -1,4 +1,4 @@
-#include "core/Weather.h"
+#include "Weather.h"
 
 namespace wx {
 

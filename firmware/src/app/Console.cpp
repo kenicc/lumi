@@ -1,21 +1,22 @@
-#include "app/Console.h"
+#include "../BuildConfig.h"
+#include "Console.h"
 
 #include <Arduino.h>
 #include <LittleFS.h>
 
 #include <string>
 
-#include "Version.h"
-#include "app/App.h"
-#include "app/Diag.h"
-#include "audio/AudioOut.h"
-#include "hw/Battery.h"
-#include "hw/Display.h"
-#include "hw/Input.h"
-#include "modem/Modem.h"
-#include "net/Identity.h"
-#include "net/Ota.h"
-#include "net/Net.h"
+#include "../Version.h"
+#include "App.h"
+#include "Diag.h"
+#include "../audio/AudioOut.h"
+#include "../hw/Battery.h"
+#include "../hw/Display.h"
+#include "../hw/Input.h"
+#include "../modem/Modem.h"
+#include "../net/Identity.h"
+#include "../net/Ota.h"
+#include "../net/Net.h"
 
 namespace console {
 
