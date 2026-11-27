@@ -39,6 +39,8 @@ const Fonts& fonts();
 
 lv_obj_t* content();  // lewa część ekranu
 void clearContent();
+// Obraz pod całym ekranem (np. tło zegara); nullptr = jednolite tło z palety
+void setBackground(const void* img);
 void setContentWide(bool wide);  // cały ekran (gdy pasek etykiet jest pusty, np. parowanie)
 
 // Pasek etykiet: slot 0 = prawy górny, 1 = środkowy, 2 = dolny

@@ -19,6 +19,10 @@
 #include "../ui/Icons.h"
 #include "../ui/Ui.h"
 
+#ifdef LUMI_TEST_BACKGROUND
+extern "C" const lv_image_dsc_t bg_test;  // src/ui/bg_test.c (tools/make_background.py)
+#endif
+
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);
 
@@ -624,6 +628,12 @@ void updateLive() {
 void render() {
   live = nullptr;
   ui::clearContent();
+  // tło testowe tylko pod zegarem i nie w wysokim kontraście (tam liczy się wyłącznie czytelność)
+  const void* bg = nullptr;
+#ifdef LUMI_TEST_BACKGROUND
+  if (call.phase == Phase::None && scr == Screen::Home && !missed.has && !ui::pal().highContrast) bg = &bg_test;
+#endif
+  ui::setBackground(bg);
   ui::setContentWide(false);
   if (call.phase != Phase::None) renderCall();
   else switch (scr) {
