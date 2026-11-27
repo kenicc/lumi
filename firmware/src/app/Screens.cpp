@@ -19,6 +19,10 @@
 #include "../ui/Icons.h"
 #include "../ui/Ui.h"
 
+#ifdef LUMI_TEST_BACKGROUND
+extern "C" const lv_image_dsc_t bg_test;  // src/ui/bg_test.c (tools/make_background.py)
+#endif
+
 LV_FONT_DECLARE(lumi_b20);
 LV_FONT_DECLARE(lumi_r20);
 
@@ -192,6 +196,33 @@ void statusLine(lv_obj_t* parent) {
   if (b[0]) ui::label(parent, F.small, c, b);
 }
 
+// Ikona połączenia w prawym dolnym rogu zegara: Wi-Fi, a gdy go nie ma - zasięg komórkowy (kreski).
+// Senior nie musi jej rozumieć; rodzina przy wizycie od razu widzi, czy LUMI ma łączność.
+void connIndicator(lv_obj_t* parent) {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  if (net::wifiConnected()) {
+    lv_obj_t* w = ui::label(parent, F.icon, P.text, IC_WIFI);
+    lv_obj_align(w, LV_ALIGN_BOTTOM_RIGHT, -6, -2);
+    return;
+  }
+  modem::Status ms = modem::status();
+  int bars = ms.registered ? ms.bars : 0;
+  // cztery kreski rosnącej wysokości; zapalone w kolorze tekstu, reszta przygaszona
+  constexpr int W = 6, GAP = 3, H0 = 8, DH = 6;
+  for (int i = 0; i < 4; i++) {
+    lv_obj_t* b = lv_obj_create(parent);
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_border_width(b, 0, 0);
+    lv_obj_set_style_radius(b, 2, 0);
+    lv_obj_set_style_pad_all(b, 0, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(b, i < bars ? P.text : lv_color_lighten(P.surface, 50), 0);
+    lv_obj_set_size(b, W, H0 + i * DH);
+    lv_obj_align(b, LV_ALIGN_BOTTOM_RIGHT, -6 - (3 - i) * (W + GAP), -4);
+  }
+}
+
 void renderHome() {
   if (missed.has) {
     renderMissed();
@@ -231,6 +262,7 @@ void renderHome() {
     lv_obj_t* w = ui::label(ui::content(), F.body, P.text, t);
     lv_obj_align(w, LV_ALIGN_BOTTOM_LEFT, 0, 0);
   }
+  connIndicator(ui::content());
 
   bool playing = audio::state().playing;
   for (int i = 0; i < 3; i++) {
@@ -596,6 +628,12 @@ void updateLive() {
 void render() {
   live = nullptr;
   ui::clearContent();
+  // tło testowe tylko pod zegarem i nie w wysokim kontraście (tam liczy się wyłącznie czytelność)
+  const void* bg = nullptr;
+#ifdef LUMI_TEST_BACKGROUND
+  if (call.phase == Phase::None && scr == Screen::Home && !missed.has && !ui::pal().highContrast) bg = &bg_test;
+#endif
+  ui::setBackground(bg);
   ui::setContentWide(false);
   if (call.phase != Phase::None) renderCall();
   else switch (scr) {

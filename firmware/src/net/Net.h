@@ -44,6 +44,9 @@ void refreshWeather();
 void reportSoon();  // wyślij stan przy najbliższej okazji (np. po zastosowaniu konfiguracji)
 void startProvisioning();
 void checkUpdateNow();
+// Własna sieć Wi-Fi "LUMI-PANEL" dla panelu przycisków (prototyp)
+void setPanelAp(bool on);
+bool panelAp();
 
 // Zdarzenie dla rodziny (np. potwierdzenie przypomnienia) - czeka w kolejce, gdy brak internetu
 void queueEvent(const std::string& json);

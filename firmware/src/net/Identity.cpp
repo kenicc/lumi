@@ -59,7 +59,8 @@ const char* apPassword() { return apPass; }
 
 std::string server() {
   xSemaphoreTake(mtx, portMAX_DELAY);
-  String s = p.getString("srv", LUMI_SERVER);
+  // isKey: bez zapisanego adresu getString wypisywałby błąd NVS przy każdym obiegu sieci (co 1 s)
+  String s = p.isKey("srv") ? p.getString("srv", LUMI_SERVER) : String(LUMI_SERVER);
   xSemaphoreGive(mtx);
   std::string r = s.c_str();
   while (!r.empty() && r.back() == '/') r.pop_back();

@@ -67,7 +67,8 @@ display::Tweaks tweaks;
 
 void loadTweaks() {
   Preferences p;
-  if (!p.begin("lcd", true)) return;  // brak przestrzeni = ustawienia domyślne
+  // tryb zapisu: tworzy pustą przestrzeń przy pierwszym starcie (tryb odczytu wypisywał wtedy błąd NVS)
+  if (!p.begin("lcd", false)) return;
   tweaks.invert = p.getBool("inv", false);
   tweaks.flip = p.getBool("flip", false);
   tweaks.bgr = p.getBool("bgr", false);
@@ -136,7 +137,12 @@ void begin() {
   lv_display_set_buffers(disp, b1, b2, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
-void tick() { lv_timer_handler(); }
+void tick() {
+  lv_timer_handler();
+  // Po każdym obiegu przesyłanie musi być zakończone: między obiegami nic nie trzyma otwartej
+  // magistrali SPI (np. przy przejściu w oszczędzanie energii, gdy ekran przestaje być odświeżany).
+  finishDma();
+}
 
 void setBacklight(uint8_t percent, bool steady) {
   if (percent > 100) percent = 100;

@@ -225,6 +225,13 @@ lv_obj_t* content() { return contentObj; }
 
 void clearContent() { lv_obj_clean(contentObj); }
 
+void setBackground(const void* img) {
+  static const void* current = nullptr;
+  if (img == current) return;  // bez zmiany: nie przerysowuj całego ekranu
+  current = img;
+  lv_obj_set_style_bg_image_src(scr, img, 0);
+}
+
 void setContentWide(bool wide) { lv_obj_set_width(contentObj, wide ? 320 : CONTENT_W); }
 
 void setRail(int i, const char* icon, const char* text, Tone tone) {
