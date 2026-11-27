@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
+#include <esp_sntp.h>
 #include <atomic>
 #include <LittleFS.h>
 #include <WebServer.h>
@@ -24,6 +25,7 @@
 #include "../app/App.h"
 #include "Identity.h"
 #include "Ota.h"
+#include "../hw/Rtc.h"
 
 extern "C" const uint8_t lumi_ca_bundle[];
 
@@ -49,13 +51,14 @@ volatile Cloud cloudState = Cloud::NoWifi;
 
 WiFiMulti* multi = nullptr;
 bool wifiOff = true;
+std::atomic<bool> ntpSynced{false};  // ustawiane z zadania SNTP, obsługiwane w zadaniu sieci
 
 // Własna sieć panelu przycisków (prototyp): telefon łączy się wprost z LUMI, więc panel działa także
 // w sieciach, które blokują ruch między urządzeniami (szkolne, publiczne, część hotspotów).
 std::atomic<bool> panelApOn{false};
 bool apUp = false;
 constexpr const char* PANEL_SSID = "LUMI-PANEL";
-bool ntpStarted = false, ntpPosted = false;
+bool ntpStarted = false;
 bool helloDone = false;
 uint32_t lastWeather = 0, lastSync = 0, lastReport = 0, connectingSince = 0;
 
@@ -687,12 +690,14 @@ void task(void*) {
     connectingSince = millis();
 
     if (!ntpStarted) {
+      // Synchronizacja co godzinę (domyślnie w SNTP); każda poprawia ekran i zegar z baterią
+      sntp_set_time_sync_notification_cb([](timeval*) { ntpSynced = true; });
       configTzTime(TZ_PL, "pool.ntp.org", "time.google.com");
       ntpStarted = true;
     }
-    if (!ntpPosted && time(nullptr) > 1700000000) {
-      ntpPosted = true;
+    if (ntpSynced.exchange(false)) {
       bus::post(Event(Ev::NetTime, 0, 0, "ntp"));
+      rtc::saveNow();
     }
 
     uint32_t now = millis();
@@ -738,7 +743,8 @@ void task(void*) {
 
 void begin() {
   mtx = xSemaphoreCreateMutex();
-  xTaskCreatePinnedToCore(task, "net", 10240, nullptr, 2, nullptr, 0);
+  // 12 KB: uzgadnianie TLS (mbedTLS) potrafi zająć ok. 8 KB stosu; zapas widać w "status"
+  xTaskCreatePinnedToCore(task, "net", 12288, nullptr, 2, nullptr, 0);
 }
 
 void apply(const Settings& s) {

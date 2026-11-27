@@ -5,6 +5,7 @@
 
 #include "../app/Diag.h"
 #include "../app/Events.h"
+#include "../hw/Rtc.h"
 #include "../core/AtParse.h"
 #include "../hw/Board.h"
 
@@ -27,6 +28,8 @@ Status st;
 volatile bool bridging = false;
 int clvlMax = 5;  // nadpisywane odpowiedzią na AT+CLVL=?
 bool timeSet = false;
+uint32_t timeSetAt = 0;
+constexpr uint32_t TIME_REFRESH_MS = 6UL * 3600 * 1000;  // czas z sieci co 6 h (zegar ESP32 trochę się spieszy/spóźnia)
 
 // --- stan rozmowy ---
 enum class CallState : uint8_t { Idle, Incoming, Dialing, Active };
@@ -202,7 +205,9 @@ void readTime() {
     timeval tv{(time_t)utc, 0};
     settimeofday(&tv, nullptr);
     timeSet = true;
+    timeSetAt = millis();
     bus::post(Event(Ev::NetTime, 0, 0, "modem"));
+    rtc::saveNow();
   }
 }
 
@@ -233,6 +238,7 @@ bool pollNetwork() {
     st.batteryMv = mv;
     xSemaphoreGive(stMutex);
   }
+  if (timeSet && millis() - timeSetAt > TIME_REFRESH_MS) timeSet = false;
   if (reg && !timeSet) readTime();
   return true;
 }
@@ -298,10 +304,18 @@ bool startup() {
   if (v == Vendor::Sim800) {
     // Stała prędkość zamiast automatycznej: modem wysyła wtedy "RDY" po każdym uruchomieniu,
     // więc widzimy jego samoczynne restarty (patrz handleUrc). Zapis do pamięci modemu tylko raz.
+    bool save = false;
     if (cmd("AT+IPR?", 1000, r, sizeof r) == Res::Ok && !strstr(r, "115200")) {
       cmd("AT+IPR=115200");
-      cmd("AT&W", 2000);
+      save = true;
     }
+    // Czas z sieci (NITZ): SIM800 stosuje AT+CLTS=1 dopiero po zapisie i ponownym uruchomieniu modemu
+    if (cmd("AT+CLTS?", 1000, r, sizeof r) == Res::Ok && strstr(r, "+CLTS: 0")) {
+      cmd("AT+CLTS=1");
+      save = true;
+      Serial.println("[modem] wlaczono czas z sieci - zadziala po nastepnym uruchomieniu modemu");
+    }
+    if (save) cmd("AT&W", 2000);
     for (const char* c : kSim800)
       if (cmd(c) != Res::Ok) Serial.printf("[modem] %s nie przeszlo\n", c);
   } else {

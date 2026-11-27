@@ -87,6 +87,10 @@ constexpr int BUF_LINES = 40;
 // Pełne przerysowanie ekranu jest wtedy wyraźnie krótsze, a procesor nie czeka bezczynnie na SPI.
 bool dmaPending = false;
 
+// Kopia ekranu w PSRAM dla podglądu w panelu (włączana tylko, gdy panel jest w programie)
+uint16_t* mirrorBuf = nullptr;
+volatile uint32_t mirrorFrame = 0;
+
 void finishDma() {
   if (!dmaPending) return;
   tft.waitDMA();
@@ -97,6 +101,12 @@ void finishDma() {
 void flush(lv_display_t*, const lv_area_t* a, uint8_t* px) {
   uint32_t w = lv_area_get_width(a), h = lv_area_get_height(a);
   finishDma();
+  if (mirrorBuf) {  // przed zamianą bajtów: kopia trzyma zwykły RGB565 (tak jak BMP)
+    const uint16_t* src = reinterpret_cast<const uint16_t*>(px);
+    for (uint32_t row = 0; row < h; row++)
+      memcpy(mirrorBuf + (a->y1 + row) * board::SCREEN_W + a->x1, src + row * w, w * 2);
+    mirrorFrame = mirrorFrame + 1;
+  }
   lv_draw_sw_rgb565_swap(px, w * h);  // ekran oczekuje starszego bajtu najpierw; zamiana w miejscu, przed DMA
   tft.startWrite();
   tft.setAddrWindow(a->x1, a->y1, w, h);
@@ -157,6 +167,15 @@ void off() {
 }
 
 bool isOn() { return on; }
+
+void enableMirror() {
+  if (mirrorBuf) return;
+  mirrorBuf = (uint16_t*)heap_caps_calloc(board::SCREEN_W * board::SCREEN_H, 2, MALLOC_CAP_SPIRAM);
+  if (disp) lv_obj_invalidate(lv_screen_active());  // pełna klatka od razu trafi do kopii
+}
+
+const uint16_t* mirror() { return mirrorBuf; }
+uint32_t mirrorVersion() { return mirrorFrame; }
 
 Tweaks currentTweaks() { return tweaks; }
 
