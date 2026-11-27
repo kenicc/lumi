@@ -158,15 +158,15 @@ SIM800L chwilami pobiera do **2 A**. To najczęstsze źródło problemów na pł
 | VCC | VBAT (dolna czerwona szyna), najkrótszym przewodem |
 | GND | GND |
 | RXD | przez dzielnik: **GPIO47 - 10 kΩ - RXD - 10 kΩ - 10 kΩ - GND** (SIM800L ma logikę 2,8 V, ESP32 daje 3,3 V) |
-| TXD | GPIO48 (DevKit v1.1) albo GPIO38 (v1.0, wtedy dodaj `-DLUMI_DEVKIT_V10`) |
+| TXD | **GPIO38** (płytka z diodą RGB na GPIO48: YD-ESP32-S3, DevKitC v1.0 - domyślne w wariancie allegro). Przy DevKitC v1.1: GPIO48 i usuń `-DLUMI_DEVKIT_V10` z platformio.ini |
 | RST | GPIO42 |
 | RING | GPIO3 |
-| DTR | GPIO38 (v1.1) albo GPIO48 (v1.0) |
+| DTR | **GPIO48** (przy DevKitC v1.1: GPIO38) |
 | SPK+ / SPK- | głośnik |
 | MIC+ / MIC- | mikrofon. Nóżka połączona z obudową mikrofonu to minus (MIC-) |
 | NET | nie podłączaj - to tylko dioda na module |
 
-Wersję DevKitu (v1.0 albo v1.1) zwykle widać na spodzie płytki albo w opisie oferty. Jeśli nie wiesz, zacznij od ustawień v1.1. Gdy modem nie odpowiada, zamień TXD z DTR, czyli dodaj flagę `-DLUMI_DEVKIT_V10`.
+Wariant allegro zakłada płytkę z diodą RGB na GPIO48 (np. YD-ESP32-S3 z dwoma złączami USB-C i polami "IN-OUT" i "RGB"). Gdy modem nie odpowiada, zamień ze sobą przewody TXD i DTR i usuń flagę `-DLUMI_DEVKIT_V10` z platformio.ini.
 
 ### B4. Kolejność włączania
 
