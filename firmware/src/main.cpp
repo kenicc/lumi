@@ -71,6 +71,9 @@ void setup() {
   bus::begin();
   rtc::begin();  // godzina z zegara z baterią (jeśli jest) - zanim cokolwiek pokaże czas
   display::begin();
+#ifdef LUMI_WEB_PANEL
+  display::enableMirror();  // podgląd ekranu w panelu przeglądarki (150 KB w PSRAM)
+#endif
   input::begin();
   battery::begin();
   app::begin();

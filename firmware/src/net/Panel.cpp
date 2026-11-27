@@ -9,6 +9,8 @@
 #include <WiFi.h>
 
 #include "../app/Events.h"
+#include "../hw/Board.h"
+#include "../hw/Display.h"
 #include "../hw/Input.h"
 #include "../net/Identity.h"
 #include "../net/Net.h"
@@ -32,7 +34,10 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,san
 main{width:100%;max-width:420px;padding:16px}
 h1{font-size:20px;margin:4px 0 2px}p{color:var(--dim);margin:0 0 16px;font-size:14px}
 .dev{display:grid;grid-template-columns:1fr 92px;gap:10px;background:#000;border-radius:22px;padding:12px}
-.scr{border:1px dashed #333;border-radius:12px;display:grid;place-items:center;color:#555;font-size:13px;min-height:220px;text-align:center;padding:8px}
+.scr{border-radius:12px;overflow:hidden;background:#111;display:grid;place-items:center;color:#555;font-size:13px;aspect-ratio:4/3;align-self:start}
+.scr img{width:100%;height:100%;display:block}
+.dev{grid-template-columns:1fr}
+.shot{display:grid;grid-template-columns:1fr 92px;gap:10px}
 .rail{display:grid;gap:10px}
 button{font:inherit;font-weight:600;color:var(--text);background:var(--card);border:0;border-radius:14px;min-height:64px;touch-action:none;user-select:none}
 button.on{background:var(--acc);color:#000}
@@ -44,14 +49,14 @@ button.on small{color:#000}
 </style></head><body><main>
 <h1>LUMI - przyciski</h1>
 <p>Krótko = naciśnięcie. Przytrzymaj ponad 1 s = długie naciśnięcie.</p>
-<div class="dev">
- <div class="scr">tu jest ekran LUMI<br>patrz na urządzenie</div>
+<div class="dev"><div class="shot">
+ <div class="scr"><img id="scr" alt="ekran LUMI"></div>
  <div class="rail">
   <button data-k="top">Górny<small>•</small></button>
   <button data-k="mid">Środek<small>&nbsp;</small></button>
   <button data-k="bottom">Dolny<small>–</small></button>
  </div>
-</div>
+</div></div>
 <div class="row">
  <button data-k="music">Muzyka</button><button data-k="home">Dom</button>
  <button data-k="call">Dzwoń</button><button data-k="power">Zasil.</button>
@@ -60,7 +65,12 @@ button.on small{color:#000}
 <div id="log"></div>
 <script>
 const log=t=>document.getElementById('log').textContent=t;
-const send=(u,t)=>fetch(u,{method:'POST'}).then(r=>log(r.ok?t:'błąd '+r.status)).catch(()=>log('brak połączenia z LUMI'));
+// podgląd ekranu: obraz pobierany tylko wtedy, gdy na LUMI coś się zmieniło
+const img=document.getElementById('scr');let ver=-1,busy=false;
+async function poll(){if(busy)return;busy=true;try{const v=await (await fetch('/v')).text();
+ if(v!==ver){ver=v;await new Promise(r=>{img.onload=img.onerror=r;img.src='/screen.bmp?'+v})}}catch(e){}busy=false}
+setInterval(poll,400);poll();
+const send=(u,t)=>fetch(u,{method:'POST'}).then(r=>{log(r.ok?t:'błąd '+r.status);setTimeout(poll,150)}).catch(()=>log('brak połączenia z LUMI'));
 document.querySelectorAll('[data-k]').forEach(b=>{
  let t0=0;
  b.addEventListener('pointerdown',e=>{t0=Date.now();b.classList.add('on');b.setPointerCapture(e.pointerId)});
@@ -97,6 +107,43 @@ void onWheel() {
   srv->send(200, "text/plain", "ok");
 }
 
+// Ekran jako BMP 16-bitowy (RGB565, BI_BITFIELDS, wiersze od góry). Bez kompresji: prosty i szybki
+// do przygotowania na ESP32; ok. 150 KB na klatkę, a strona pobiera ją tylko po zmianie.
+void onScreen() {
+  const uint16_t* fb = display::mirror();
+  if (!fb) {
+    srv->send(503, "text/plain", "podglad niedostepny");
+    return;
+  }
+  constexpr uint32_t W = board::SCREEN_W, H = board::SCREEN_H;
+  constexpr uint32_t HDR = 14 + 40 + 12, DATA = W * H * 2;
+  uint8_t h[HDR] = {0};
+  auto put32 = [&](int at, uint32_t v) { memcpy(h + at, &v, 4); };
+  h[0] = 'B';
+  h[1] = 'M';
+  put32(2, HDR + DATA);
+  put32(10, HDR);
+  put32(14, 40);
+  put32(18, W);
+  put32(22, (uint32_t)(-(int32_t)H));  // ujemna wysokość = wiersze od góry
+  h[26] = 1;
+  h[28] = 16;
+  put32(30, 3);  // BI_BITFIELDS
+  put32(34, DATA);
+  put32(54, 0xF800);
+  put32(58, 0x07E0);
+  put32(62, 0x001F);
+  srv->setContentLength(HDR + DATA);
+  srv->sendHeader("Cache-Control", "no-store");
+  srv->send(200, "image/bmp", "");
+  srv->sendContent(reinterpret_cast<const char*>(h), HDR);
+  // po 16 wierszy (20 KB) - mniej wywołań sieci niż wiersz po wierszu
+  for (uint32_t y = 0; y < H; y += 16) {
+    uint32_t rows = (H - y) < 16 ? (H - y) : 16;
+    srv->sendContent(reinterpret_cast<const char*>(fb + y * W), rows * W * 2);
+  }
+}
+
 void task(void*) {
   for (;;) {
     bool sta = WiFi.status() == WL_CONNECTED;
@@ -118,6 +165,8 @@ void task(void*) {
       srv->on("/", HTTP_GET, [] { srv->send_P(200, "text/html; charset=utf-8", PAGE); });
       srv->on("/key", HTTP_POST, onKey);
       srv->on("/wheel", HTTP_POST, onWheel);
+      srv->on("/screen.bmp", HTTP_GET, onScreen);
+      srv->on("/v", HTTP_GET, [] { srv->send(200, "text/plain", String(display::mirrorVersion())); });
       srv->begin();
     }
     if (sta && WiFi.localIP() != shownIp) {
