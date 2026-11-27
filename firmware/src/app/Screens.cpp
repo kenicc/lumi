@@ -147,6 +147,7 @@ void renderMissed() {
   auto& F = ui::fonts();
   lv_obj_t* col = ui::column(ui::content(), 4);
   ui::label(col, F.body, P.no, IC_PHONE " Nieodebrane", true);
+  int nameH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 32 - 34 - 12;  // nagłówek, godzina, odstępy
   char name[40];
   int k = C.contactIndexByNumber(missed.number);
   if (k >= 0)
@@ -155,7 +156,7 @@ void renderMissed() {
     at::formatNumber(missed.number, name, sizeof name);
   else
     strlcpy(name, "Numer zastrzeżony", sizeof name);
-  ui::label(col, ui::titleFont(name), P.text, name, true);
+  ui::label(col, ui::fitFont(name, ui::contentInnerW(), nameH), P.text, name, true);
   char when[48] = "";
   if (missed.at > 1700000000) {
     tm l;
@@ -165,7 +166,7 @@ void renderMissed() {
     else
       snprintf(when, sizeof when, "o %02d:%02d", l.tm_hour, l.tm_min);
   }
-  if (when[0]) ui::label(col, F.small, P.dim, when, true);
+  if (when[0]) ui::label(col, F.body, P.dim, when, true);
 
   if (missed.number[0] && modemReady) ui::setRail(0, IC_PHONE, "Oddzwoń", ui::Tone::Yes);
   else ui::hideRail(0);
@@ -257,8 +258,21 @@ const lv_font_t* clockFont(int width) {
   return F.tileClock;
 }
 
-// Ekran główny według szkicu z kafelkami (27.11), na cały ekran - bez etykiet przycisków:
-// góra: kafelek zegara (pasek baterii, łączność) i kafelek pogody; dół: pas z dniem i datą.
+// Kolor kafelka pogody: ciemny odcień zależny od pogody (biały tekst ma zawsze kontrast > 10:1)
+lv_color_t weatherTint(int code) {
+  switch (wx::iconFor(code)) {
+    case wx::Icon::Sun: return lv_color_hex(0x3A2A12);
+    case wx::Icon::CloudSun: return lv_color_hex(0x2E2A22);
+    case wx::Icon::Rain:
+    case wx::Icon::Shower: return lv_color_hex(0x12263C);
+    case wx::Icon::Snow: return lv_color_hex(0x223240);
+    case wx::Icon::Storm: return lv_color_hex(0x2A1F3A);
+    default: return lv_color_hex(0x232A33);
+  }
+}
+
+// Ekran główny (szkic 27.11, wersja minimalistyczna): zegar na całą szerokość możliwie największy,
+// pod nim tylko dwa kafelki - dzień z datą i pogoda. Bateria i łączność jednym cienkim paskiem.
 void renderHome() {
   if (missed.has) {
     renderMissed();
@@ -267,8 +281,7 @@ void renderHome() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
   bool wide = !ui::railLabels();
-  int areaW = (wide ? 320 : ui::CONTENT_W) - 16;
-  constexpr int WX_W = 96;
+  int areaW = ui::contentInnerW();
 
   tm l = now_tm();
   bool tv = timeValid();
@@ -276,30 +289,27 @@ void renderHome() {
   if (tv) snprintf(clock, sizeof clock, "%d:%02d", l.tm_hour, l.tm_min);
   else strlcpy(clock, "--:--", sizeof clock);
   wx::Forecast f = net::forecast();
-  bool wxTile = wide && C.weather;  // z etykietami pogoda jest przy przycisku "Pogoda"
+  bool wxTile = wide && C.weather;
 
   lv_obj_t* col = ui::column(ui::content(), ui::TILE_GAP);
-  lv_obj_t* top = ui::row(col, ui::TILE_GAP);
-  lv_obj_set_flex_grow(top, 1);
 
-  // kafelek zegara
-  lv_obj_t* tc = ui::tile(top);
-  lv_obj_set_width(tc, LV_SIZE_CONTENT);
-  lv_obj_set_height(tc, lv_pct(100));
+  // zegar
+  lv_obj_t* tc = ui::tile(col);
   lv_obj_set_flex_grow(tc, 1);
-  lv_obj_set_flex_align(tc, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-  lv_obj_set_style_pad_row(tc, 8, 0);
-  int clockW = areaW - (wxTile ? WX_W + ui::TILE_GAP : 0) - 2 * ui::TILE_PAD - 2;
-  ui::label(tc, clockFont(clockW), P.text, clock);
+  lv_obj_set_flex_align(tc, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(tc, 6, 0);
+  lv_obj_t* cl = ui::label(tc, clockFont(areaW - 2 * ui::TILE_PAD - 2), P.text, clock);
+  lv_obj_set_style_text_align(cl, LV_TEXT_ALIGN_CENTER, 0);
 
   char prob[48];
   lv_color_t probC;
   bool problem = homeProblem(prob, sizeof prob, probC);
   if (problem && !(battery::known() && battery::charging())) {
-    ui::label(tc, F.small, probC, prob);  // problem zamiast paska baterii - widać go od razu
-  } else {
+    ui::label(tc, F.body, probC, prob);  // problem zamiast paska baterii - duży i kolorowy
+  } else if (battery::known() || net::wifiConnected() || modemReady) {
     lv_obj_t* r = ui::row(tc, 10);
-    lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(r, lv_pct(86));
+    lv_obj_set_flex_align(r, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     if (battery::known()) {
       lv_obj_t* bwrap = ui::row(r, 0);
       lv_obj_set_width(bwrap, LV_SIZE_CONTENT);
@@ -314,42 +324,42 @@ void renderHome() {
     }
   }
 
-  // kafelek pogody: ikona i temperatura teraz (Open-Meteo przez Wi-Fi)
+  // dół: dzień z datą + pogoda
+  lv_obj_t* bottom = ui::row(col, ui::TILE_GAP);
+  constexpr int ROW_H = 92;
+  lv_obj_set_height(bottom, ROW_H);
+  int wxW = 0;
+  char temp[16] = "";
   if (wxTile) {
-    lv_obj_t* tw = ui::tile(top);
-    lv_obj_set_size(tw, WX_W, lv_pct(100));
-    lv_obj_set_style_pad_left(tw, ui::TILE_PAD, 0);
-    lv_obj_set_flex_align(tw, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(tw, 4, 0);
-    if (f.valid) {
-      ui::label(tw, F.iconBig, P.text, weatherIcon(f.codeNow));
-      char t[16];
-      snprintf(t, sizeof t, "%d°", (int)lroundf(f.tempNow));
-      ui::label(tw, ui::fits(t, F.title, WX_W - 12) ? F.title : F.body, P.text, t);
-    } else {
-      ui::label(tw, F.iconBig, P.dim, IC_CLOUD_SUN);
-      ui::label(tw, F.small, P.dim, net::wifiConnected() ? "--°" : "bez Wi-Fi");
-    }
+    if (f.valid) snprintf(temp, sizeof temp, "%d°", (int)lroundf(f.tempNow));
+    const char* ic = f.valid ? weatherIcon(f.codeNow) : IC_CLOUD_SUN;
+    const char* tt = f.valid ? temp : "--";
+    wxW = (int)lv_text_get_width(ic, strlen(ic), F.iconBig, 0) + 8 + (int)lv_text_get_width(tt, strlen(tt), F.iconBig, 0) +
+          2 * ui::TILE_PAD + 6;
   }
-
-  // pas z dniem i datą (w szkicu wielkie litery; tu zwykłe - seniorzy czytają je szybciej)
   if (tv) {
-    lv_obj_t* td = ui::tile(col);
-    int innerW = areaW - 2 * ui::TILE_PAD - 2;
+    lv_obj_t* td = ui::tile(bottom);
+    lv_obj_set_size(td, LV_SIZE_CONTENT, lv_pct(100));
+    lv_obj_set_flex_grow(td, 1);
+    lv_obj_set_flex_align(td, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    int innerW = areaW - (wxTile ? wxW + ui::TILE_GAP : 0) - 2 * ui::TILE_PAD - 4;
     char day[64], date[40];
     cal::dayLine(l.tm_wday, l.tm_hour, C.partOfDay, day, sizeof day);
-    const lv_font_t* dayF = ui::fits(day, F.title, innerW) ? F.title : F.body;
-    bool partLine = false;
-    if (!ui::fits(day, dayF, innerW)) {
-      strlcpy(day, cal::weekday(l.tm_wday), sizeof day);
-      partLine = C.partOfDay;
-    }
+    if (!ui::fits(day, F.title, innerW)) strlcpy(day, cal::weekday(l.tm_wday), sizeof day);  // pora dnia znika, gdy brak miejsca
     cal::dateLine(l.tm_mday, l.tm_mon + 1, date, sizeof date);
-    lv_obj_t* dr = ui::row(td, 10);  // dzień i pora dnia w jednej linii, gdy pora nie zmieściła się w tytule
-    lv_obj_set_flex_align(dr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
-    ui::label(dr, dayF, P.text, day);
-    if (partLine) ui::label(dr, F.small, P.accent, cal::partOfDay(l.tm_hour));
-    ui::label(td, ui::fits(date, F.body, innerW) ? F.body : F.small, P.dim, date);
+    ui::label(td, ui::fitFont(day, innerW, 42), P.text, day);
+    ui::label(td, ui::fitFont(date, innerW, 34), P.dim, date);
+  }
+  if (wxTile) {
+    lv_obj_t* tw = ui::tile(bottom);
+    lv_obj_set_size(tw, tv ? wxW : lv_pct(100), lv_pct(100));
+    lv_obj_set_flex_flow(tw, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(tw, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(tw, 8, 0);
+    lv_obj_set_style_pad_left(tw, ui::TILE_PAD, 0);
+    if (!P.highContrast && f.valid) lv_obj_set_style_bg_color(tw, weatherTint(f.codeNow), 0);
+    ui::label(tw, F.iconBig, f.valid ? P.text : P.dim, f.valid ? weatherIcon(f.codeNow) : IC_CLOUD_SUN);
+    ui::label(tw, F.iconBig, f.valid ? P.text : P.dim, f.valid ? temp : "--");
   }
 
   if (wide) {  // boczne przyciski na zegarze: środkowy = pogoda na jutro (obsługa w App.cpp)
@@ -409,7 +419,7 @@ void renderContacts() {
   centerText(ui::label(col, ui::titleFont(k.name.c_str()), P.text, k.name.c_str(), true));
   char pos[24];
   snprintf(pos, sizeof pos, "%d z %d", contactIdx + 1, (int)C.contacts.size());
-  if (C.contacts.size() > 1) ui::label(col, F.small, P.dim, pos);
+  if (C.contacts.size() > 1) ui::label(col, F.body, P.dim, pos);
 
   bool many = C.contacts.size() > 1;
   if (many) ui::setRail(0, IC_UP, "Poprzedni", ui::Tone::Neutral);
@@ -461,7 +471,7 @@ void renderMedia() {
     st = as.noWifi ? "Brak Wi-Fi" : "Nie udało się włączyć";
     sc = P.no;
   } else if (playing) st = "Gra";
-  if (st) ui::label(col, F.body, sc, st);
+  if (st) ui::label(col, F.title, sc, st);
 
   bool many = C.mediaList.size() > 1;
   if (many) ui::setRail(0, IC_UP, "Wcześniej", ui::Tone::Neutral);
@@ -643,8 +653,9 @@ void renderReminder() {
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(row, 10, 0);
   ui::label(row, F.icon, P.accent, IC_BELL);
-  ui::label(row, F.body, P.accent, t);
-  ui::label(col, F.title, P.text, r.text.c_str(), true);
+  ui::label(row, F.title, P.accent, t);
+  int textH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 44;  // pod godziną, nad paskiem podpowiedzi
+  ui::label(col, ui::fitFont(r.text.c_str(), ui::contentInnerW(), textH), P.text, r.text.c_str(), true);
   ui::setRail(0, IC_CHECK, "Zrobione", ui::Tone::Yes);
   ui::hideRail(1);
   if (reminders.canSnooze()) ui::setRail(2, IC_CLOSE, "Później", ui::Tone::Neutral);
@@ -658,9 +669,9 @@ void renderMessage() {
   lv_obj_t* col = ui::column(ui::content(), 4);
   std::string head = std::string(IC_USER " ") + m.author;
   ui::label(col, F.body, P.accent, head.c_str(), true);
-  // długi tekst mniejszą czcionką, żeby zmieścił się cały
-  const lv_font_t* f = m.text.size() <= 40 ? F.title : (m.text.size() <= 80 ? F.body : F.small);
-  ui::label(col, f, P.text, m.text.c_str(), true);
+  // największy krój, w którym cały tekst mieści się nad paskiem podpowiedzi
+  int textH = ui::CONTENT_INNER_H - ui::HINT_BAR_H - 32 - 26 - 8;
+  ui::label(col, ui::fitFont(m.text.c_str(), ui::contentInnerW(), textH), P.text, m.text.c_str(), true);
   if (m.at > 1700000000) {
     time_t t = (time_t)m.at;
     tm l;
@@ -682,11 +693,11 @@ void renderCall() {
   char name[40];
   callerName(name, sizeof name);
   lv_obj_t* col = centeredColumn();
-  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, 80, photoFor(k));
+  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, 88, photoFor(k));
   centerText(ui::label(col, ui::titleFont(name), P.text, name, true));
   switch (call.phase) {
     case Phase::Incoming:
-      ui::label(col, F.body, P.yes, "dzwoni");
+      ui::label(col, F.title, P.yes, "dzwoni");
       live = call.autoAt ? ui::label(col, F.small, P.dim, "", true) : nullptr;
       ui::setRail(0, IC_PHONE, "Odbierz", ui::Tone::Yes);
       if (!call.silenced) ui::setRail(1, IC_BELL_SLASH, "Cisza", ui::Tone::Neutral);
@@ -694,13 +705,13 @@ void renderCall() {
       ui::setRail(2, IC_PHONE_SLASH, "Odrzuć", ui::Tone::No);
       break;
     case Phase::Outgoing:
-      ui::label(col, F.body, P.dim, "Łączę...");
+      ui::label(col, F.title, P.dim, "Łączę...");
       ui::hideRail(0);
       ui::hideRail(1);
       ui::setRail(2, IC_PHONE_SLASH, "Rozłącz", ui::Tone::No);
       break;
     case Phase::Active:
-      live = ui::label(col, F.body, P.yes, "Rozmowa");
+      live = ui::label(col, F.title, P.yes, "Rozmowa");
       if (call.autoAnswered) centerText(ui::label(col, F.small, P.accent, "Rozmowa otwarta, możesz mówić", true));
       ui::hideRail(0);
       ui::hideRail(1);

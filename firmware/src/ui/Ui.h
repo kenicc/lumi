@@ -72,6 +72,11 @@ constexpr int TILE_GAP = 6;
 bool fits(const char* text, const lv_font_t* f, int width);
 // Krój tytułu, a gdy tekst się nie mieści w jednej linii - mniejszy (bez łamania imion i numerów)
 const lv_font_t* titleFont(const char* text);
+// Największy krój (48 -> 24 px, najmniej drugorzędny), w którym tekst z łamaniem mieści się w w x h
+const lv_font_t* fitFont(const char* text, int w, int h);
+int contentInnerW();             // szerokość treści bez marginesów (320 - 16, gdy etykiety ukryte)
+constexpr int CONTENT_INNER_H = 240 - 16;
+constexpr int HINT_BAR_H = 36;   // pasek podpowiedzi Dom / Dzwoń
 
 // Nakładki
 void notice(const char* icon, const char* text);

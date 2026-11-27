@@ -50,7 +50,7 @@ int highlighted = -1;
 // nie są rysowane. Pokazujemy je w trybie jednego przycisku, gdzie wyróżnienie musi być widać.
 bool labelsShown = false;
 lv_obj_t* hintObj = nullptr;
-constexpr int HINT_H = 30;
+constexpr int HINT_H = 36;
 
 lv_obj_t* noticeObj = nullptr;
 lv_obj_t* toastObj = nullptr;
@@ -277,7 +277,7 @@ void hints(const char* home, Tone homeTone, const char* call) {
     char b[48];
     snprintf(b, sizeof b, "%s %s", icon, text);
     lv_obj_t* l = lv_label_create(hintObj);
-    lv_obj_set_style_text_font(l, &lumi_b20, 0);
+    lv_obj_set_style_text_font(l, &lumi_b24, 0);
     lv_obj_set_style_text_color(l, c, 0);
     lv_label_set_text(l, b);
     return l;
@@ -418,8 +418,24 @@ bool fits(const char* text, const lv_font_t* f, int width) {
   return lv_text_get_width(text, strlen(text), f, 0) <= width;
 }
 
+int contentInnerW() { return (labelsShown ? CONTENT_W : 320) - 16; }
+
 const lv_font_t* titleFont(const char* text) {
-  return fits(text, F.title, CONTENT_W - 16) ? F.title : F.body;
+  int w = contentInnerW();
+  if (fits(text, &lumi_b48, w)) return &lumi_b48;  // jak największy - imię ma być czytelne z daleka
+  return fits(text, F.title, w) ? F.title : F.body;
+}
+
+// Największy krój, w którym tekst (łamany na linie) mieści się w prostokącie w x h.
+// Najmniejszy dopuszczalny to krój drugorzędny (min. 20 px) - mniejszego senior nie przeczyta.
+const lv_font_t* fitFont(const char* text, int w, int h) {
+  static const lv_font_t* const order[] = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_b24};
+  for (const lv_font_t* f : order) {
+    lv_point_t sz;
+    lv_text_get_size(&sz, text, f, 0, 0, w, LV_TEXT_FLAG_NONE);
+    if (sz.y <= h && sz.x <= w) return f;
+  }
+  return F.small;
 }
 
 // --- nakładki ---
