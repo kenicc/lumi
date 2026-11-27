@@ -17,6 +17,7 @@
 #include "../net/Identity.h"
 #include "../net/Ota.h"
 #include "../net/Net.h"
+#include "../net/Panel.h"
 
 namespace console {
 
@@ -49,6 +50,7 @@ void help() {
       "  msg <tekst>       pokaz wiadomosc od Ani (test)\n"
       "  selftest          test sprzetu krok po kroku (albo Home przytrzymany przy wlaczaniu)\n"
       "  ota               sprawdz i zainstaluj aktualizacje teraz (bez czekania na noc)\n"
+      "  panel             adres panelu z przyciskami w przegladarce (LUMI musi byc w sieci Wi-Fi)\n"
       "  input             podglad przyciskow i rolki w konsoli (wl/wyl) - test okablowania bez ekranu\n"
       "  lcd test          pasy: czerwony zielony niebieski bialy czarny (od lewej)\n"
       "  lcd inv|flip|bgr  przelacz: negatyw / obrot o 180 / zamiana czerwony-niebieski\n"
@@ -135,6 +137,11 @@ void exec(char* l) {
   if (!strcmp(l, "help")) help();
   else if (!strcmp(l, "status")) status();
   else if (!strcmp(l, "lcd")) lcd(arg);
+  else if (!strcmp(l, "panel")) {
+    std::string a = panel::address();
+    if (!a.empty()) Serial.printf("otworz w przegladarce: %s\n", a.c_str());
+    else Serial.println("brak polaczenia z Wi-Fi - najpierw: wifi <nazwa sieci> <haslo>");
+  }
   else if (!strcmp(l, "input")) {
     input::setTrace(!input::trace());
     Serial.println(input::trace() ? "podglad wlaczony: krec rolka, naciskaj przyciski (input = wylacz)"
