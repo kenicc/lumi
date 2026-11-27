@@ -3,11 +3,13 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <esp_heap_caps.h>
 
 #include <string>
 
 #include "../Version.h"
 #include "App.h"
+#include "Events.h"
 #include "Diag.h"
 #include "../audio/AudioOut.h"
 #include "../hw/Battery.h"
@@ -44,7 +46,8 @@ void help() {
       "  config            wklej dokument konfiguracji JSON, zakoncz linia z kropka\n"
       "  cfg               podsumowanie konfiguracji; reload - wczytaj ponownie\n"
       "  notice <tekst>    pokaz komunikat jak po zmianie od rodziny\n"
-      "  wifi <nazwa> <haslo>  dodaj siec Wi-Fi; provision - siec LUMI do konfiguracji z telefonu\n"
+      "  wifi <nazwa> <haslo>  dodaj siec Wi-Fi (nazwa ze spacjami: wifi \"Moja Siec\" haslo)\n"
+      "  provision         siec LUMI do konfiguracji Wi-Fi z telefonu\n"
       "  server <adres>    adres aplikacji rodziny, np. server https://lumi.vercel.app\n"
       "  pair              link i kod parowania; factory - przywroc ustawienia fabryczne\n"
       "  remind <tekst>    pokaz przypomnienie teraz (test)\n"
@@ -111,7 +114,16 @@ void status() {
   Serial.printf("audio: zrodlo %d, gra %d, glosnosc %u\n", (int)a.src, a.playing, a.volume);
   time_t t = time(nullptr);
   Serial.printf("czas: %s", ctime(&t));
-  Serial.printf("wolna pamiec: %u B, PSRAM: %u B\n", ESP.getFreeHeap(), ESP.getFreePsram());
+  Serial.printf("pamiec wewnetrzna: wolne %u B, najmniej od startu %u B, najwiekszy blok %u B; PSRAM wolne %u B\n",
+                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT), ESP.getFreePsram());
+  Serial.print("wolny stos zadan (najmniej od startu):");
+  for (const char* n : {"loopTask", "net", "modem", "panel", "audio"}) {
+    TaskHandle_t t = xTaskGetHandle(n);
+    if (t) Serial.printf(" %s %u B", n, (unsigned)uxTaskGetStackHighWaterMark(t));
+  }
+  Serial.printf("\nzdarzenia utracone (pelna kolejka): %u\n", (unsigned)bus::dropped());
 }
 
 void cfgSummary() {
@@ -192,10 +204,22 @@ void exec(char* l) {
   else if (!strcmp(l, "reload")) Serial.println(app::reloadConfig(true) ? "ok" : "blad");
   else if (!strcmp(l, "notice")) app::showNotice(arg);
   else if (!strcmp(l, "wifi")) {
-    char* pass = strchr(arg, ' ');
-    if (pass) *pass++ = 0;
+    // nazwa ze spacjami w cudzysłowie: wifi "Moja Siec" haslo
+    char* pass = nullptr;
+    if (*arg == '"') {
+      arg++;
+      char* end = strchr(arg, '"');
+      if (end) {
+        *end = 0;
+        pass = end + 1;
+        while (*pass == ' ') pass++;
+      }
+    } else {
+      pass = strchr(arg, ' ');
+      if (pass) *pass++ = 0;
+    }
     if (!*arg) {
-      Serial.println("uzycie: wifi <nazwa> <haslo> (nazwa bez spacji; inaczej przez provision)");
+      Serial.println("uzycie: wifi <nazwa> <haslo>, nazwa ze spacjami w cudzyslowie: wifi \"Moja Siec\" haslo");
       return;
     }
     identity::addWifi(arg, pass ? pass : "");

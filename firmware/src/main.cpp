@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <esp_sleep.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include "app/App.h"
@@ -86,6 +87,31 @@ void setup() {
 // pierwsze naciśnięcie budzi urządzenie w ułamku sekundy.
 static bool lowPower = false;
 
+// Kontrola zdrowia co minutę: kończąca się pamięć albo stos zadania to przyszła awaria - lepiej
+// zobaczyć ostrzeżenie w diagnostyce (rodzina też je widzi) niż zgadywać po restarcie.
+static void healthCheck() {
+  static uint32_t last = 0;
+  static bool heapWarned = false;
+  static uint8_t stackWarned = 0;
+  if (millis() - last < 60000) return;
+  last = millis();
+  size_t minInternal = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+  if (!heapWarned && minInternal < 16 * 1024) {
+    heapWarned = true;
+    diag::error("[pamiec] malo pamieci wewnetrznej: min %u B", (unsigned)minInternal);
+  }
+  static const char* const kTasks[] = {"loopTask", "net", "modem", "panel", "audio"};
+  for (size_t i = 0; i < sizeof kTasks / sizeof kTasks[0]; i++) {
+    TaskHandle_t t = xTaskGetHandle(kTasks[i]);
+    if (!t || (stackWarned & (1 << i))) continue;
+    UBaseType_t freeBytes = uxTaskGetStackHighWaterMark(t);  // ESP-IDF: w bajtach
+    if (freeBytes < 768) {
+      stackWarned |= 1 << i;
+      diag::error("[pamiec] zadanie %s: zostalo tylko %u B stosu", kTasks[i], (unsigned)freeBytes);
+    }
+  }
+}
+
 void loop() {
   step(1);
   input::poll();
@@ -106,6 +132,7 @@ void loop() {
   }
   step(7);
   if (!lowPower) display::tick();
+  healthCheck();
   esp_task_wdt_reset();
   step(8);
   delay(lowPower ? 20 : 5);

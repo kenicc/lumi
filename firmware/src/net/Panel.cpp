@@ -20,6 +20,7 @@ namespace {
 constexpr uint16_t PORT = 8080;  // 80 zajmuje strona konfiguracji Wi-Fi
 WebServer* srv = nullptr;
 IPAddress shownIp;
+bool wasUp = false;  // czy w poprzednim obiegu była jakakolwiek sieć
 
 const char PAGE[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -101,9 +102,17 @@ void task(void*) {
     bool sta = WiFi.status() == WL_CONNECTED;
     bool ap = WiFi.getMode() & WIFI_MODE_AP;
     if (!sta && !ap) {
+      wasUp = false;
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
+    // Sieć zniknęła i wróciła (np. restart radia): gniazdo nasłuchu trzeba otworzyć od nowa,
+    // inaczej panel milczy do restartu urządzenia
+    if (srv && !wasUp) {
+      srv->stop();
+      srv->begin();
+    }
+    wasUp = true;
     if (!srv) {
       srv = new WebServer(PORT);
       srv->on("/", HTTP_GET, [] { srv->send_P(200, "text/html; charset=utf-8", PAGE); });
@@ -116,7 +125,7 @@ void task(void*) {
       Serial.printf("[panel] przyciski w przegladarce: %s\n", address().c_str());
     }
     srv->handleClient();
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(pdMS_TO_TICKS(10));  // 100 razy na sekundę wystarczy na kliknięcia, a rdzeń 0 częściej śpi
   }
 }
 
@@ -127,7 +136,7 @@ void begin() {
   p.begin("panel", false);
   net::setPanelAp(p.getBool("ap", true));  // domyślnie włączona: działa w każdej sieci
   p.end();
-  xTaskCreatePinnedToCore(task, "panel", 4096, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(task, "panel", 6144, nullptr, 1, nullptr, 0);  // serwer WWW + String: 4 KB to za mało na zapas
 }
 
 void setOwnNetwork(bool on) {

@@ -743,7 +743,8 @@ void task(void*) {
 
 void begin() {
   mtx = xSemaphoreCreateMutex();
-  xTaskCreatePinnedToCore(task, "net", 10240, nullptr, 2, nullptr, 0);
+  // 12 KB: uzgadnianie TLS (mbedTLS) potrafi zająć ok. 8 KB stosu; zapas widać w "status"
+  xTaskCreatePinnedToCore(task, "net", 12288, nullptr, 2, nullptr, 0);
 }
 
 void apply(const Settings& s) {

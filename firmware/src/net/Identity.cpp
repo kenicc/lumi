@@ -57,36 +57,56 @@ const char* secret() { return sec; }
 const char* pairCode() { return pair; }
 const char* apPassword() { return apPass; }
 
+// Adres serwera trzymany w RAM: zadanie sieci pyta o niego co sekundę, a odczyt z NVS to flash i mutex
+std::string srvCache;
+bool srvLoaded = false;
+
 std::string server() {
   xSemaphoreTake(mtx, portMAX_DELAY);
-  // isKey: bez zapisanego adresu getString wypisywałby błąd NVS przy każdym obiegu sieci (co 1 s)
-  String s = p.isKey("srv") ? p.getString("srv", LUMI_SERVER) : String(LUMI_SERVER);
+  if (!srvLoaded) {
+    String s = p.isKey("srv") ? p.getString("srv", LUMI_SERVER) : String(LUMI_SERVER);
+    srvCache = s.c_str();
+    while (!srvCache.empty() && srvCache.back() == '/') srvCache.pop_back();
+    srvLoaded = true;
+  }
+  std::string r = srvCache;
   xSemaphoreGive(mtx);
-  std::string r = s.c_str();
-  while (!r.empty() && r.back() == '/') r.pop_back();
   return r;
 }
-
 void setServer(const std::string& url) {
   xSemaphoreTake(mtx, portMAX_DELAY);
   p.putString("srv", url.c_str());
+  srvLoaded = false;  // następny odczyt weźmie nową wartość
   xSemaphoreGive(mtx);
+}
+
+// Lista sieci w RAM: zadanie sieci pyta o nią co sekundę (wcześniej odczyt NVS i parsowanie JSON za każdym razem)
+std::vector<cfg::Wifi> wifiCache;
+bool wifiLoaded = false;
+
+std::vector<cfg::Wifi> loadWifiLocked() {
+  if (!wifiLoaded) {
+    wifiCache.clear();
+    if (p.isKey("wifi")) {
+      JsonDocument d;
+      if (!deserializeJson(d, p.getString("wifi", "[]")))
+        for (JsonObject o : d.as<JsonArray>()) wifiCache.push_back({o["s"] | "", o["p"] | ""});
+    }
+    wifiLoaded = true;
+  }
+  return wifiCache;
 }
 
 std::vector<cfg::Wifi> wifi() {
   xSemaphoreTake(mtx, portMAX_DELAY);
-  // isKey: brak zapisanych sieci to stan normalny, a getString zapisywałby wtedy błąd w konsoli co kilka sekund
-  String s = p.isKey("wifi") ? p.getString("wifi", "[]") : String("[]");
+  std::vector<cfg::Wifi> out = loadWifiLocked();
   xSemaphoreGive(mtx);
-  std::vector<cfg::Wifi> out;
-  JsonDocument d;
-  if (deserializeJson(d, s)) return out;
-  for (JsonObject o : d.as<JsonArray>()) out.push_back({o["s"] | "", o["p"] | ""});
   return out;
 }
 
 void addWifi(const std::string& ssid, const std::string& pass) {
-  auto list = wifi();
+  xSemaphoreTake(mtx, portMAX_DELAY);  // całość pod blokadą: dwa równoczesne dopisania nie zgubią sieci
+  auto list = loadWifiLocked();
   for (auto it = list.begin(); it != list.end();)
     it = (it->ssid == ssid) ? list.erase(it) : it + 1;
   list.insert(list.begin(), {ssid, pass});
@@ -99,13 +119,15 @@ void addWifi(const std::string& ssid, const std::string& pass) {
   }
   String s;
   serializeJson(d, s);
-  xSemaphoreTake(mtx, portMAX_DELAY);
   p.putString("wifi", s);
+  wifiCache = list;
   xSemaphoreGive(mtx);
 }
 
 void factoryReset() {
   p.clear();
+  srvLoaded = false;
+  wifiLoaded = false;
   generate();
   LittleFS.remove("/config.json");
   LittleFS.remove("/config.bak");

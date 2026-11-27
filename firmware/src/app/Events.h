@@ -47,5 +47,6 @@ struct Event {
 namespace bus {
 void begin();
 bool post(const Event& e);  // bezpieczne z każdego zadania
+uint32_t dropped();          // ile zdarzeń przepadło przez pełną kolejkę (diagnostyka)
 bool receive(Event& e, uint32_t timeoutMs);
 }  // namespace bus
