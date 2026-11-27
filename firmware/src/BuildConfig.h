@@ -9,7 +9,6 @@
 #define LUMI_PANEL_INVERT 0
 #define LUMI_MODEM_RESET_ONLY
 #define LUMI_WEB_PANEL  // przyciski w przeglądarce: http://<adres>:8080 (tylko prototyp)
-#define LUMI_TEST_BACKGROUND  // tło zegara z src/ui/bg_test.c
 #define LUMI_AUDIO_MODEM  // dźwięk z głośnika modemu (prototyp bez DAC i radia FM)
 #define LUMI_DEVKIT_V10  // dioda RGB na GPIO48 (YD-ESP32-S3, DevKitC v1.0); przy v1.1 usuń tę linię
 #endif
