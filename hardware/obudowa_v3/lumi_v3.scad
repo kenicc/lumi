@@ -20,7 +20,10 @@ ekran_pcb_t = 1.6;
 ekran_lcd_t = 4.2;               // od wierzchu płytki do wierzchu szkła (typowe dla 2,8")
 ekran_modul_h = 7.0;             // cały moduł z elementami z tyłu (z aukcji) - zapas głębokości
 aktywny = [57.6, 43.2];          // świecący obraz 2,8" 320x240 (zgodnie u wszystkich producentów)
-aktywny_off = [(81.0 - 57.6) / 2, (55.0 - 43.2) / 2];   // ZAŁOŻENIE: obraz na środku płytki
+aktywny_off = [8.0, 7.0];        // zmierzone: lewy-dolny róg obrazu od lewego-dolnego rogu płytki (C, D)
+rama = [70.0, 50.0];             // zmierzone: szkło z obramowaniem - wchodzi W otwór frontu
+rama_luz = 0.3;                  // luz ramki w otworze z każdej strony
+szklo_wglebienie = 0.5;          // wierzch szkła tyle pod powierzchnią frontu (chroni przed porysowaniem)
 // Otwory montażowe: puste = mocowanie bez otworów (narożne kątowniki we froncie + dociski z tyłu).
 // Po zmierzeniu można wpisać np. [[3, 3], [78, 3], [3, 52], [78, 52]] - wtedy słupki pod wkręty.
 ekran_otwory = [];
@@ -43,8 +46,12 @@ W = ceil(2 * sciana + pcb_luz + ekran_pcb[0] + pcb_luz + kolnierz_wysieg + kol_w
 pcb_x0 = -W / 2 + sciana + pcb_luz;                 // lewa krawędź płytki ekranu
 pcb_y1 = H / 2 - sciana - pcb_luz;                  // górna krawędź płytki ekranu
 pcb_y0 = pcb_y1 - ekran_pcb[1];
-okno = [aktywny[0] + 1.0, aktywny[1] + 1.0];        // obraz + 0,5 mm z każdej strony (jak w v2.2)
-okno_c = [pcb_x0 + aktywny_off[0] + aktywny[0] / 2, pcb_y0 + aktywny_off[1] + aktywny[1] / 2];
+// Otwór na całą ramkę ekranu (szkło z obramowaniem), wyśrodkowany na obrazie. Gdyby ramka nie była
+// wyśrodkowana względem obrazu, popraw rama_off (przesunięcie środka ramki względem środka obrazu).
+rama_off = [0, 0];
+okno = [rama[0] + 2 * rama_luz, rama[1] + 2 * rama_luz];
+okno_c = [pcb_x0 + aktywny_off[0] + aktywny[0] / 2 + rama_off[0], pcb_y0 + aktywny_off[1] + aktywny[1] / 2 + rama_off[1]];
+pcb_z = szklo_wglebienie + ekran_lcd_t;              // przednia powierzchnia płytki ekranu od frontu
 kol_x = pcb_x0 + ekran_pcb[0] + pcb_luz + kolnierz_wysieg + kol_w / 2;
 kol_y0 = H / 2 - sciana - pcb_luz - kolnierz_wysieg - kol_h / 2;
 kol_y = [for (i = [0 : 2]) kol_y0 - i * (kol_h + przerwa)];   // górny, środkowy, dolny
@@ -64,7 +71,7 @@ wyciecia = [
   ["lewa", -27.0, 6.9],
 ];
 wyc_z = 10.4; wyc_h = 5.8;       // od frontu w głąb: środek i wysokość (zaokrąglone końce)
-r_otwor = 2.7; r_okno = 1.2;      // zaokrąglenia narożników otworów i okna (z v2.2)
+r_otwor = 2.7; r_okno = 0.6;      // zaokrąglenia narożników otworów i okna (z v2.2)
 faza_frontu = 1.3;               // zaokrąglona przednia krawędź obudowy
 kratka_x = [16.7, 21.7, 26.7, 31.7, 36.7, 41.7]; kratka_w = 2.4;   // szczeliny w dolnej ścianie
 tyl_v22 = 7.5;
@@ -116,12 +123,16 @@ module przod_uklad() {
       translate([W / 2 - sciana - 2.2, kol_dol, plytka_z - 3]) cube([2.2, kol_gora - kol_dol - 6, 3]);  // bez narożnika (słupek wkrętu)
       translate([-(W / 2 - 9), -H / 2 + sciana, plytka_z - 3]) cube([W - 18, 2.2, 3]);
       // słupki modułu ekranu (gdy znane otwory) albo narożne kątowniki ustawiające płytkę
-      for (o = ekran_otwory) translate([pcb_x0 + o[0], pcb_y0 + o[1], plyta]) cylinder(h = ekran_lcd_t - 0.6, d = 5.5);
+      for (o = ekran_otwory) translate([pcb_x0 + o[0], pcb_y0 + o[1], plyta]) cylinder(h = pcb_z - plyta, d = 5.5);
       if (len(ekran_otwory) == 0)
         for (cx = [0, 1], cy = [0, 1]) {
           x = pcb_x0 + cx * ekran_pcb[0]; y = pcb_y0 + cy * ekran_pcb[1];
           sx = cx == 0 ? -1 : 1; sy = cy == 0 ? -1 : 1;
-          h = ekran_lcd_t - 0.6 + ekran_pcb_t;  // do tylnej powierzchni płytki
+          h = pcb_z + ekran_pcb_t - plyta;  // do tylnej powierzchni płytki
+          // podkładka pod narożnikiem płytki, tylko gdy nie wchodzi w ramkę ekranu (ramka leży przed płytką)
+          px = x - sx * 1.5; py = y - sy * 1.5;
+          wolne = abs(px - okno_c[0]) > okno[0] / 2 + 1.25 || abs(py - okno_c[1]) > okno[1] / 2 + 1.25;
+          if (wolne) translate([px - 1.25, py - 1.25, plyta]) cube([2.5, 2.5, pcb_z - plyta]);
           // prawe kątowniki bez części przy prawej krawędzi: tam od środka są kołnierze nasadek kolumny
           difference() {
             translate([x + sx * 0.3, y + sy * 0.3, plyta]) mirror([cx, 0, 0]) mirror([0, cy, 0])
@@ -140,12 +151,6 @@ module przod_uklad() {
     for (o = ekran_otwory) translate([pcb_x0 + o[0], pcb_y0 + o[1], plyta]) cylinder(h = ekran_lcd_t, d = ekran_otwor_d);
     // kątowniki nie mogą wchodzić w okno ani w otwory przycisków (przy dużym przesunięciu obrazu)
 
-    // gniazdo na szkło: 0,6 mm w płycie frontu, w obrysie płytki (centruje moduł)
-    translate([pcb_x0 - 0.2 + ekran_pcb[0] / 2, pcb_y0 + ekran_pcb[1] / 2, plyta - 0.6]) linear_extrude(0.7)
-      difference() {
-        square([ekran_pcb[0] + 0.4, ekran_pcb[1] + 0.4], center = true);
-        for (o = ekran_otwory) translate([o[0] - ekran_pcb[0] / 2, o[1] - ekran_pcb[1] / 2]) circle(d = 6);
-      }
   }
 }
 
@@ -175,7 +180,7 @@ module tyl() {
       g = przod_h + tyl_h - plytka_z - pcb_t;  // od dna tyłu do płytki
       // dociski narożników płytki ekranu (gdy mocowanie bez otworów); 3 mm od krawędzi płytki
       if (len(ekran_otwory) == 0) {
-        ge = przod_h + tyl_h - (plyta - 0.6 + ekran_lcd_t + ekran_pcb_t);
+        ge = przod_h + tyl_h - (pcb_z + ekran_pcb_t);
         for (cx = [0, 1], cy = [0, 1])
           translate([pcb_x0 + 3 + cx * (ekran_pcb[0] - 6), pcb_y0 + 3 + cy * (ekran_pcb[1] - 6), 0]) cylinder(h = ge, d = 4);
       }
@@ -218,7 +223,8 @@ module zlozenie() {
   Z = przod_h + tyl_h;
   color("#d9c9a8") translate([0, 0, Z]) rotate([0, 180, 0]) przod();
   color("#cbb994") tyl();
-  color("#111") translate([okno_c[0], okno_c[1], Z - 0.3]) linear_extrude(0.2) square([okno[0] - 1, okno[1] - 1], center = true);
+  color("#2a2a2a") translate([okno_c[0], okno_c[1], Z - szklo_wglebienie - 0.2]) linear_extrude(0.2) square(rama, center = true);
+  color("#0b0b0d") translate([pcb_x0 + aktywny_off[0] + aktywny[0] / 2, pcb_y0 + aktywny_off[1] + aktywny[1] / 2, Z - szklo_wglebienie]) linear_extrude(0.1) square(aktywny, center = true);
   for (y = kol_y) color("#6b6f76") translate([kol_x, y, Z]) linear_extrude(wystaje) zaokr2d([kol_w - 2 * luz, kol_h - 2 * luz], r_otwor - luz);
   for (i = [0 : 2]) color(i == 2 ? "#45c08a" : "#6b6f76") translate([dol_x[i], dol_y, Z]) linear_extrude(wystaje) zaokr2d([dol_w - 2 * luz, dol_h - 2 * luz], r_otwor - luz);
 }
@@ -233,5 +239,7 @@ if (kol_x - kol_w / 2 - kolnierz_wysieg < pcb_x0 + ekran_pcb[0] + 0.2) echo("UWA
 if (dol_y + dol_h / 2 + kolnierz_wysieg > pcb_y0 - 0.2) echo("UWAGA: dolny rzad pod plytka ekranu");
 if (kol_y[2] - kol_h / 2 - kolnierz_wysieg < dol_y + dol_h / 2 + kolnierz_wysieg + 0.4) echo("UWAGA: kolumna nachodzi na dolny rzad");
 if (dol_x[2] + dol_w / 2 + kolnierz_wysieg > W / 2 - sciana) echo("UWAGA: dolny rzad nie miesci sie w szerokosci");
-if (okno_c[0] - okno[0] / 2 < pcb_x0 || okno_c[0] + okno[0] / 2 > pcb_x0 + ekran_pcb[0]) echo("UWAGA: okno poza plytka ekranu - sprawdz aktywny_off");
+if (okno_c[0] - okno[0] / 2 < pcb_x0 - 0.2 || okno_c[0] + okno[0] / 2 > pcb_x0 + ekran_pcb[0] + 0.2) echo("UWAGA: ramka ekranu wychodzi poza plytke w poziomie - sprawdz aktywny_off i rama_off");
+if (okno_c[1] - okno[1] / 2 < pcb_y0 - 0.2 || okno_c[1] + okno[1] / 2 > pcb_y0 + ekran_pcb[1] + 0.2) echo("UWAGA: ramka ekranu wychodzi poza plytke w pionie - sprawdz aktywny_off i rama_off");
+if (okno_c[0] + okno[0] / 2 > kol_x - kol_w / 2 - kolnierz_wysieg - 0.5) echo("UWAGA: otwor ekranu za blisko kolumny przyciskow");
 echo(str("LUMI v3 (", wariant, "): ", W, " x ", H, " x ", przod_h + tyl_h, " mm; wnetrze ok. ", przod_h + tyl_h - plyta - tyl_dno, " mm"));

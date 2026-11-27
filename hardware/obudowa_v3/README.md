@@ -21,7 +21,14 @@ Obudowa jest dopasowana do **części, a nie do interfejsu**. Interfejs nie ma j
 
 **Obudowa: 108 x 80 mm**, grubość 22,5 mm (wariant docelowy) albo 37 mm (prototyp).
 
-**Założenie do sprawdzenia:** aukcja nie podaje, gdzie na płytce jest świecący obraz. Model zakłada, że obraz jest **na środku płytki**. Jeśli jest przesunięty (np. w stronę przeciwną do pinów), okno trzeba przesunąć. Zmierz C i D z tabeli poniżej i popraw `aktywny_off`.
+**Ekran w otworze (zmierzone 28.11):**
+- obraz zaczyna się 8 mm od lewej (strona pinów) i 7 mm od dołu płytki;
+- cała ramka ekranu (szkło z obramowaniem) ma 70 x 50 mm i **wchodzi w otwór frontu**, nie chowa się za nim;
+- otwór ma 70,6 x 50,6 mm (luz 0,3 mm z każdej strony) i jest wyśrodkowany na obrazie;
+- szkło leży 0,5 mm pod powierzchnią frontu, żeby się nie rysowało;
+- płytka opiera się na 3 podkładkach w narożnikach, tam gdzie wystaje poza ramkę (lewy górny róg jest pod ramką), a słupki z tyłu ją dociskają.
+
+Jeśli ramka nie jest wyśrodkowana względem obrazu (np. szerszy pas po stronie taśmy), popraw `rama_off`.
 
 Z v2.2 zostało bez zmian:
 - narożniki R8, front 15 mm, płyta 2 mm, ściany 1,8 mm, zaokrąglona przednia krawędź;
@@ -38,8 +45,10 @@ Moduły 2,8" różnią się między producentami. Popraw sekcję `moduł ekranu`
 | Parametr | Co zmierzyć | Teraz w modelu |
 | --- | --- | --- |
 | `ekran_pcb` | płytka: szerokość x wysokość (piny po lewej) | 81 x 55 (z aukcji) |
-| `aktywny_off` (C, D) | od lewego dolnego rogu płytki do lewego dolnego rogu świecącego obrazu | 11,7 / 5,9 (założony środek) |
-| `ekran_lcd_t` | od wierzchu płytki do wierzchu szkła | 4,2 (typowe) |
+| `aktywny_off` (C, D) | od lewego dolnego rogu płytki do lewego dolnego rogu świecącego obrazu | 8 / 7 (zmierzone) |
+| `rama` | szkło z obramowaniem | 70 x 50 (zmierzone) |
+| `rama_off` | przesunięcie środka ramki względem środka obrazu | 0 / 0 |
+| `ekran_lcd_t` | od wierzchu płytki do wierzchu szkła | 4,2 (typowe; jeśli szkło wystaje albo jest za głęboko, popraw) |
 | `ekran_otwory` | środki otworów od lewego dolnego rogu płytki | puste = mocowanie bez otworów |
 
 Szerokość, okno, kolumna i otwory przeliczą się same. Gdy coś na siebie nachodzi, OpenSCAD wypisze `UWAGA: ...`. Możesz też podać mi te wymiary, a przeliczę model.
@@ -67,7 +76,7 @@ Szerokość, okno, kolumna i otwory przeliczą się same. Gdy coś na siebie nac
 
 ## Składanie
 
-1. Włóż nasadki od środka frontu. Moduł ekranu włóż szkłem w gniazdo frontu, między 4 kątowniki. Po zamknięciu tylnej ścianki słupki dociskają narożniki płytki.
+1. Włóż nasadki od środka frontu. Moduł ekranu włóż ramką w otwór frontu, między 4 kątowniki, płytką na podkładki. Po zamknięciu tylnej ścianki słupki dociskają narożniki płytki.
 2. Przyciski 12 x 12 przylutuj do dwóch pasków płytki uniwersalnej, w położeniach otworów (patrząc od frontu, środek obudowy w 0,0):
    - prawa kolumna: x 40,3, y 28,6 / 9,5 / -9,6;
    - dolny rząd: y -29,7, x -33,3 / 0 / 33,3.
