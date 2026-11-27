@@ -408,8 +408,10 @@ void report(const Settings& s) {
   d["boots"] = diag::bootCount();
   JsonArray errs = d["errors"].to<JsonArray>();
   for (const auto& e : diag::recent()) errs.add(e);
-  d["battery"] = battery::percent();
-  d["batteryMv"] = battery::millivolts();
+  if (battery::known()) {  // bez pomiaru pole zostaje puste - aplikacja pokaże "brak danych"
+    d["battery"] = battery::percent();
+    d["batteryMv"] = battery::millivolts();
+  }
   d["charging"] = battery::charging();
   d["signal"] = m.bars;
   d["registered"] = m.registered;
@@ -550,7 +552,7 @@ bool goodTimeToUpdate() {
   tm l;
   localtime_r(&t, &l);
   bool night = l.tm_hour >= 2 && l.tm_hour < 5;
-  bool power = battery::charging() || battery::percent() >= 50;
+  bool power = battery::charging() || !battery::known() || battery::percent() >= 50;  // nieznana = zasilacz (prototyp)
   return night && power && app::idleForUpdate();
 }
 

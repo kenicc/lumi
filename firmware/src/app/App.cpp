@@ -477,6 +477,15 @@ void onKey(Key k, Ev type) {
   }
 
   bool right = k == Key::Top || k == Key::Mid || k == Key::Bottom;
+  // Bez etykiet: na zegarze środkowy boczny przycisk pokazuje pogodę na jutro, górny i dolny nic nie robią
+  if (right && !ui::railLabels() && scr == Screen::Home && !missed.has && call.phase == Phase::None) {
+    if (type == Ev::KeyShort && k == Key::Mid && C.weather) {
+      audio::sound(audio::Sound::Key);
+      net::refreshWeather();
+      go(Screen::Weather);
+    }
+    return;
+  }
   if (right) {
     int slot = (int)k;
     if (C.oneButton && k == Key::Mid) {
@@ -500,6 +509,14 @@ void onKey(Key k, Ev type) {
     }
     if (type == Ev::KeyShort) rightAction(slot);
     return;
+  }
+  // Dom / Dzwoń jako "nie" / "tak" na ekranach z wyborem (rozmowa, potwierdzenie, przypomnienie...)
+  if (type == Ev::KeyShort) {
+    int bs = bottomSlot(k);
+    if (bs >= 0 && ui::railVisible(bs)) {
+      rightAction(bs);
+      return;
+    }
   }
   if (k == Key::Home && type == Ev::KeyLong && call.phase == Phase::None) {
     audio::sound(audio::Sound::Confirm);
@@ -646,6 +663,7 @@ void announceChange() {
 void applyConfig() {
   ui::setTheme(C.textSize, C.highContrast);
   input::configure(C.minPressMs, C.repeatIgnoreMs, C.oneButton);
+  ui::setRailLabels(C.oneButton);  // tryb jednego przycisku potrzebuje widocznego wyróżnienia
   audio::setMaxVolume(C.maxVolume);
   audio::setKeyClick(C.keyClick);
   if (!audio::hasMedia()) modem::ringer(ringLevel());
@@ -691,6 +709,7 @@ bool loadConfig() {
 }
 
 void checkBattery() {
+  if (!battery::known()) return;  // bez pomiaru nie straszymy "słabą baterią"
   uint8_t p = battery::percent();
   if (battery::charging() || p > 30) {
     batteryWarned = 100;

@@ -156,6 +156,7 @@ void poll() {}
 uint16_t millivolts() { return 3900; }
 uint8_t percent() { return batPct; }
 bool charging() { return false; }
+bool known() { return true; }
 }  // namespace battery
 
 namespace input {
@@ -314,14 +315,20 @@ int main() {
   shot("04_radio_gra");
 
   key(Key::Home);
-  key(Key::Bottom);  // slot "Pogoda"
+  key(Key::Mid);  // bez etykiet: środkowy boczny przycisk na zegarze = pogoda
   shot("05_pogoda");
+  check(D::scr == Screen::Weather, "srodkowy boczny na zegarze pokazuje pogode");
 
+  // szybkie wybieranie z zegara istnieje tylko z etykietami (tryb jednego przycisku, starsze warianty)
   key(Key::Home);
-  key(Key::Top);  // szybkie wybieranie
+  ui::setRailLabels(true);
+  D::render();
+  key(Key::Top);
   shot("06_potwierdzenie");
   check(D::scr == Screen::Confirm, "szybkie wybieranie pyta o potwierdzenie");
   key(Key::Bottom);
+  ui::setRailLabels(false);
+  D::render();
 
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48600100200"));
   run(1200);

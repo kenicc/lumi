@@ -106,8 +106,11 @@ void status() {
   if (s.restarts || s.voltageWarnings)
     Serial.printf("modem: samoczynne restarty %u, ostrzezenia o napieciu %u (sprawdz zasilanie modemu)\n",
                   s.restarts, s.voltageWarnings);
-  Serial.printf("bateria: %u mV, %u%%, ladowanie: %s\n", battery::millivolts(), battery::percent(),
-                battery::charging() ? "tak" : "nie");
+  if (battery::known())
+    Serial.printf("bateria: %u mV, %u%%, ladowanie: %s\n", battery::millivolts(), battery::percent(),
+                  battery::charging() ? "tak" : "nie");
+  else
+    Serial.println("bateria: brak pomiaru (dzielnik na GPIO1 albo modem SIM800L)");
   Serial.printf("wifi: %s %s\n", net::wifiConnected() ? "polaczone" : "brak", net::wifiSsid().c_str());
   Serial.printf("serwer: %s (%s)\n", identity::server().c_str(), net::cloudName(net::cloud()));
   audio::State a = audio::state();

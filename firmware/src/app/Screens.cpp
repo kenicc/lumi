@@ -173,56 +173,92 @@ void renderMissed() {
   ui::setRail(2, IC_CLOSE, "Zamknij", ui::Tone::Neutral);
 }
 
-void statusLine(lv_obj_t* parent) {
-  // Pokazujemy tylko problemy - gdy wszystko działa, ekran jest czysty
+// Problem do pokazania zamiast zwykłego kafelka stanu (bateria, telefon, karta, zasięg).
+// Zwraca false, gdy wszystko działa - wtedy ekran jest spokojny.
+bool homeProblem(char* b, size_t n, lv_color_t& c) {
   auto& P = ui::pal();
-  auto& F = ui::fonts();
-  char b[48] = "";
-  lv_color_t c = P.no;
   modem::Status ms = modem::status();
+  c = P.no;
   uint8_t pct = battery::percent();
-  if (battery::charging()) {
-    snprintf(b, sizeof b, IC_BOLT " Ładuje się, %u%%", pct);
+  if (battery::known() && battery::charging()) {
+    snprintf(b, n, IC_BOLT " Ładuje się, %u%%", pct);
     c = P.yes;
-  } else if (pct <= 20) {
-    snprintf(b, sizeof b, IC_BAT_1 " Bateria %u%%", pct);
+  } else if (battery::known() && pct <= 20) {
+    snprintf(b, n, IC_BAT_1 " Bateria %u%%", pct);
   } else if (modemFailed) {
-    strlcpy(b, IC_WARN " Telefon nie działa", sizeof b);
+    strlcpy(b, IC_WARN " Telefon nie działa", n);
   } else if (modemReady && !simOk) {
-    strlcpy(b, IC_WARN " Brak karty SIM", sizeof b);
+    strlcpy(b, IC_WARN " Brak karty SIM", n);
   } else if (modemReady && !ms.registered) {
-    strlcpy(b, IC_SIGNAL " Brak zasięgu", sizeof b);
+    strlcpy(b, IC_SIGNAL " Brak zasięgu", n);
+  } else {
+    return false;
   }
-  if (b[0]) ui::label(parent, F.small, c, b);
+  return true;
 }
 
-// Ikona połączenia w prawym dolnym rogu zegara: Wi-Fi, a gdy go nie ma - zasięg komórkowy (kreski).
-// Senior nie musi jej rozumieć; rodzina przy wizycie od razu widzi, czy LUMI ma łączność.
-void connIndicator(lv_obj_t* parent) {
+// Cztery kreski zasięgu w rzędzie (zapalone w kolorze tekstu, reszta przygaszona)
+void signalBars(lv_obj_t* parent, int bars) {
   auto& P = ui::pal();
-  auto& F = ui::fonts();
-  if (net::wifiConnected()) {
-    lv_obj_t* w = ui::label(parent, F.icon, P.text, IC_WIFI);
-    lv_obj_align(w, LV_ALIGN_BOTTOM_RIGHT, -6, -2);
-    return;
-  }
-  modem::Status ms = modem::status();
-  int bars = ms.registered ? ms.bars : 0;
-  // cztery kreski rosnącej wysokości; zapalone w kolorze tekstu, reszta przygaszona
+  lv_obj_t* box = lv_obj_create(parent);
+  lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(box, 0, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
   constexpr int W = 6, GAP = 3, H0 = 8, DH = 6;
+  lv_obj_set_size(box, 4 * W + 3 * GAP, H0 + 3 * DH);
   for (int i = 0; i < 4; i++) {
-    lv_obj_t* b = lv_obj_create(parent);
+    lv_obj_t* b = lv_obj_create(box);
     lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_border_width(b, 0, 0);
     lv_obj_set_style_radius(b, 2, 0);
-    lv_obj_set_style_pad_all(b, 0, 0);
     lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(b, i < bars ? P.text : lv_color_lighten(P.surface, 50), 0);
+    lv_obj_set_style_bg_color(b, i < bars ? P.text : lv_color_lighten(P.surface, 60), 0);
     lv_obj_set_size(b, W, H0 + i * DH);
-    lv_obj_align(b, LV_ALIGN_BOTTOM_RIGHT, -6 - (3 - i) * (W + GAP), -4);
+    lv_obj_align(b, LV_ALIGN_BOTTOM_LEFT, i * (W + GAP), 0);
   }
 }
 
+// Pasek baterii jak w szkicu: zaokrąglona belka z wypełnieniem i procentem obok (procent poza
+// belką, żeby cyfry zawsze miały pełny kontrast). Bez pomiaru baterii paska nie ma.
+void batteryBar(lv_obj_t* parent, uint8_t pct, bool charging) {
+  auto& P = ui::pal();
+  auto& F = ui::fonts();
+  lv_obj_t* r = ui::row(parent, 8);
+  lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_t* track = lv_obj_create(r);
+  lv_obj_remove_flag(track, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_border_width(track, P.highContrast ? 2 : 0, 0);
+  lv_obj_set_style_border_color(track, P.text, 0);
+  lv_obj_set_style_pad_all(track, 0, 0);
+  lv_obj_set_style_radius(track, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(track, lv_color_lighten(P.surface, 40), 0);
+  lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+  lv_obj_set_height(track, 20);
+  lv_obj_set_flex_grow(track, 1);
+  lv_obj_t* fill = lv_obj_create(track);
+  lv_obj_remove_flag(fill, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_border_width(fill, 0, 0);
+  lv_obj_set_style_radius(fill, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(fill, charging ? P.yes : (pct <= 20 ? P.no : P.text), 0);
+  lv_obj_set_size(fill, lv_pct(pct < 8 ? 8 : pct), lv_pct(100));
+  char t[16];
+  snprintf(t, sizeof t, charging ? IC_BOLT "%u%%" : "%u%%", pct);
+  ui::label(r, F.small, P.text, t);
+}
+
+// Największy krój cyfr, w którym zmieści się każda godzina ("00:00" jest najszersze) - zegar nie
+// zmienia wielkości w zależności od tego, która jest godzina
+const lv_font_t* clockFont(int width) {
+  auto& F = ui::fonts();
+  if (ui::fits("00:00", F.huge, width)) return F.huge;
+  if (ui::fits("00:00", F.clock, width)) return F.clock;
+  return F.tileClock;
+}
+
+// Ekran główny według szkicu z kafelkami (27.11), na cały ekran - bez etykiet przycisków:
+// góra: kafelek zegara (pasek baterii, łączność) i kafelek pogody; dół: pas z dniem i datą.
 void renderHome() {
   if (missed.has) {
     renderMissed();
@@ -230,39 +266,96 @@ void renderHome() {
   }
   auto& P = ui::pal();
   auto& F = ui::fonts();
-  lv_obj_t* col = ui::column(ui::content(), 0);
-  statusLine(col);
+  bool wide = !ui::railLabels();
+  int areaW = (wide ? 320 : ui::CONTENT_W) - 16;
+  constexpr int WX_W = 96;
 
   tm l = now_tm();
-  char b[64];
-  if (timeValid())
-    snprintf(b, sizeof b, "%d:%02d", l.tm_hour, l.tm_min);
-  else
-    strlcpy(b, "--:--", sizeof b);
-  ui::label(col, F.clock, P.text, b);
-
-  if (timeValid()) {
-    // "Wtorek wieczorem" w jednej linii, a gdy się nie mieści - pora dnia osobno
-    char day[64];
-    cal::dayLine(l.tm_wday, l.tm_hour, C.partOfDay, day, sizeof day);
-    if (!C.partOfDay || ui::fits(day, F.body, ui::CONTENT_W - 16)) {
-      ui::label(col, F.body, P.text, day);
-    } else {
-      ui::label(col, F.body, P.text, cal::weekday(l.tm_wday));
-      ui::label(col, F.small, P.accent, cal::partOfDay(l.tm_hour));
-    }
-    cal::dateLine(l.tm_mday, l.tm_mon + 1, b, sizeof b);
-    ui::label(col, F.small, P.dim, b);
-  }
-
+  bool tv = timeValid();
+  char clock[16];
+  if (tv) snprintf(clock, sizeof clock, "%d:%02d", l.tm_hour, l.tm_min);
+  else strlcpy(clock, "--:--", sizeof clock);
   wx::Forecast f = net::forecast();
-  if (C.weather && f.valid) {
-    char t[32];
-    snprintf(t, sizeof t, "%s %d°", weatherIcon(f.codeNow), (int)lroundf(f.tempNow));
-    lv_obj_t* w = ui::label(ui::content(), F.body, P.text, t);
-    lv_obj_align(w, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  bool wxTile = wide && C.weather;  // z etykietami pogoda jest przy przycisku "Pogoda"
+
+  lv_obj_t* col = ui::column(ui::content(), ui::TILE_GAP);
+  lv_obj_t* top = ui::row(col, ui::TILE_GAP);
+  lv_obj_set_flex_grow(top, 1);
+
+  // kafelek zegara
+  lv_obj_t* tc = ui::tile(top);
+  lv_obj_set_width(tc, LV_SIZE_CONTENT);
+  lv_obj_set_height(tc, lv_pct(100));
+  lv_obj_set_flex_grow(tc, 1);
+  lv_obj_set_flex_align(tc, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(tc, 8, 0);
+  int clockW = areaW - (wxTile ? WX_W + ui::TILE_GAP : 0) - 2 * ui::TILE_PAD - 2;
+  ui::label(tc, clockFont(clockW), P.text, clock);
+
+  char prob[48];
+  lv_color_t probC;
+  bool problem = homeProblem(prob, sizeof prob, probC);
+  if (problem && !(battery::known() && battery::charging())) {
+    ui::label(tc, F.small, probC, prob);  // problem zamiast paska baterii - widać go od razu
+  } else {
+    lv_obj_t* r = ui::row(tc, 10);
+    lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    if (battery::known()) {
+      lv_obj_t* bwrap = ui::row(r, 0);
+      lv_obj_set_width(bwrap, LV_SIZE_CONTENT);
+      lv_obj_set_flex_grow(bwrap, 1);
+      batteryBar(bwrap, battery::percent(), battery::charging());
+    }
+    if (net::wifiConnected()) {
+      ui::label(r, F.icon, P.dim, IC_WIFI);
+    } else if (modemReady) {
+      modem::Status ms = modem::status();
+      signalBars(r, ms.registered ? ms.bars : 0);
+    }
   }
-  connIndicator(ui::content());
+
+  // kafelek pogody: ikona i temperatura teraz (Open-Meteo przez Wi-Fi)
+  if (wxTile) {
+    lv_obj_t* tw = ui::tile(top);
+    lv_obj_set_size(tw, WX_W, lv_pct(100));
+    lv_obj_set_style_pad_left(tw, ui::TILE_PAD, 0);
+    lv_obj_set_flex_align(tw, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(tw, 4, 0);
+    if (f.valid) {
+      ui::label(tw, F.iconBig, P.text, weatherIcon(f.codeNow));
+      char t[16];
+      snprintf(t, sizeof t, "%d°", (int)lroundf(f.tempNow));
+      ui::label(tw, ui::fits(t, F.title, WX_W - 12) ? F.title : F.body, P.text, t);
+    } else {
+      ui::label(tw, F.iconBig, P.dim, IC_CLOUD_SUN);
+      ui::label(tw, F.small, P.dim, net::wifiConnected() ? "--°" : "bez Wi-Fi");
+    }
+  }
+
+  // pas z dniem i datą (w szkicu wielkie litery; tu zwykłe - seniorzy czytają je szybciej)
+  if (tv) {
+    lv_obj_t* td = ui::tile(col);
+    int innerW = areaW - 2 * ui::TILE_PAD - 2;
+    char day[64], date[40];
+    cal::dayLine(l.tm_wday, l.tm_hour, C.partOfDay, day, sizeof day);
+    const lv_font_t* dayF = ui::fits(day, F.title, innerW) ? F.title : F.body;
+    bool partLine = false;
+    if (!ui::fits(day, dayF, innerW)) {
+      strlcpy(day, cal::weekday(l.tm_wday), sizeof day);
+      partLine = C.partOfDay;
+    }
+    cal::dateLine(l.tm_mday, l.tm_mon + 1, date, sizeof date);
+    lv_obj_t* dr = ui::row(td, 10);  // dzień i pora dnia w jednej linii, gdy pora nie zmieściła się w tytule
+    lv_obj_set_flex_align(dr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+    ui::label(dr, dayF, P.text, day);
+    if (partLine) ui::label(dr, F.small, P.accent, cal::partOfDay(l.tm_hour));
+    ui::label(td, ui::fits(date, F.body, innerW) ? F.body : F.small, P.dim, date);
+  }
+
+  if (wide) {  // boczne przyciski na zegarze: środkowy = pogoda na jutro (obsługa w App.cpp)
+    ui::hideRails();
+    return;
+  }
 
   bool playing = audio::state().playing;
   for (int i = 0; i < 3; i++) {
@@ -284,7 +377,14 @@ void renderHome() {
         }
         break;
       case cfg::SlotKind::Weather:
-        if (C.weather) ui::setRail(i, IC_CLOUD_SUN, "Pogoda", ui::Tone::Neutral);
+        if (C.weather) {
+          wx::Forecast fw = net::forecast();  // ikona przy przycisku pokazuje pogodę teraz
+          // jak w szkicu: ikona i temperatura na kafelku pogody, słowo pod spodem
+          char wt[24];
+          if (fw.valid) snprintf(wt, sizeof wt, "%s %d°", weatherIcon(fw.codeNow), (int)lroundf(fw.tempNow));
+          else strlcpy(wt, IC_CLOUD_SUN, sizeof wt);
+          ui::setRail(i, wt, "Pogoda", ui::Tone::Neutral);
+        }
         else ui::hideRail(i);
         break;
       default: ui::hideRail(i);
@@ -625,6 +725,33 @@ void updateLive() {
   }
 }
 
+// Bez etykiet na ekranie decyzje podejmuje się dolnymi przyciskami: zielony Dzwoń = tak / odbierz /
+// zadzwoń, Dom = nie / odrzuć / rozłącz / później. Boczne przyciski zostają: góra / OK / dół.
+int bottomSlot(Key k) {
+  if (ui::railLabels()) return -1;
+  bool callKey = k == Key::Call, homeKey = k == Key::Home;
+  if (!callKey && !homeKey) return -1;
+  if (call.phase == Phase::Incoming) return callKey ? 0 : 2;
+  if (call.phase != Phase::None) return homeKey ? 2 : -1;
+  switch (scr) {
+    case Screen::Home:
+      if (missed.has) return callKey ? 0 : 2;
+      return -1;
+    case Screen::Confirm: return callKey ? 0 : 2;
+    case Screen::Contacts: return callKey ? 1 : -1;
+    case Screen::Reminder: return callKey ? 0 : 2;
+    case Screen::Message: return callKey ? 1 : 0;
+    default: return -1;
+  }
+}
+
+void showHints() {
+  int h = bottomSlot(Key::Home), c = bottomSlot(Key::Call);
+  const char* ht = h >= 0 ? ui::railText(h) : nullptr;
+  const char* ct = c >= 0 ? ui::railText(c) : nullptr;
+  ui::hints(ht, h >= 0 ? ui::railTone(h) : ui::Tone::Neutral, ct);
+}
+
 void render() {
   live = nullptr;
   ui::clearContent();
@@ -652,6 +779,7 @@ void render() {
     }
   updateLive();
   firstHighlight();
+  showHints();
 }
 
 void go(Screen s) {

@@ -14,7 +14,8 @@ uint16_t trendRef = 0;
 uint32_t trendAt = 0;
 bool chg = false;
 uint32_t lastPoll = 0;
-bool noDivider = false;  // dzielnik niepodłączony: napięcie bierzemy z modemu (SIM800 AT+CBC)
+bool noDivider = false;
+bool modemSeen = false;  // był choć jeden odczyt napięcia z modemu  // dzielnik niepodłączony: napięcie bierzemy z modemu (SIM800 AT+CBC)
 
 // Krzywa Li-ion pod lekkim obciążeniem: (mV, %)
 const uint16_t kCurve[][2] = {{4150, 100}, {4050, 90}, {3950, 78}, {3870, 65}, {3800, 52}, {3750, 40},
@@ -46,6 +47,7 @@ void poll() {
   if (noDivider) {
     int m = modem::status().batteryMv;
     if (m <= 0) return;
+    modemSeen = true;
     if (filtered < 16000) filtered = m * 16;  // pierwszy pomiar
     mv = m;
   }
@@ -74,5 +76,7 @@ uint8_t percent() {
 }
 
 bool charging() { return chg; }
+
+bool known() { return !noDivider || modemSeen; }
 
 }  // namespace battery
