@@ -36,3 +36,4 @@
 #define IC_INFO "\xEF\x81\x9A"         // F05A
 #define IC_BACK "\xEF\x81\xA0"         // F060
 #define IC_SHUFFLE "\xEF\x81\xB4"      // F074
+#define IC_PODCAST "\xEF\x8B\x8E"      // F2CE

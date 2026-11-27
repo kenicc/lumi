@@ -1,4 +1,5 @@
 "use server";
+import { fetchEpisodes } from "@/lib/podcast";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getProfile, requireMember } from "@/lib/access";
@@ -83,6 +84,17 @@ export async function addPlaylist(id: string, name: string, urls: string[], from
   return saveSettings(id, "media", (s) => {
     if (!urls.length) return "Brak plików";
     s.media.push({ type: "playlist", name: name.trim() || "Muzyka", from: from.slice(0, 24) || undefined, urls });
+  }, p(id, "/radio"));
+}
+
+export async function addPodcast(id: string, fd: FormData) {
+  const name = str(fd, "name");
+  const feed = str(fd, "feed");
+  const eps = await fetchEpisodes(feed);  // przed zapisem: rodzina od razu widzi, czy adres działa
+  return saveSettings(id, "media", (s) => {
+    if (s.media.length >= 40) return "Najwięcej 40 pozycji";
+    if (typeof eps === "string") return eps;
+    s.media.push({ type: "podcast", name, feed, episodes: eps });
   }, p(id, "/radio"));
 }
 

@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 96 px
  * Bpp: 4
- * Opts: --bpp 4 --size 96 --no-compress --format lvgl --lv-include lvgl.h -o src/ui/fonts/lumi_d96.c --font /tmp/claude-0/-home-user-lumi/8d5e49dd-0c1a-5807-8abb-5f1ff06ef52e/scratchpad/fonts/node_modules/@fontsource/inter/files/inter-latin-600-normal.woff -r 0x20,0x2D,0x30-0x3A,0xB0
+ * Opts: --bpp 4 --size 96 --no-compress --format lvgl --lv-include lvgl.h -o tools/../src/ui/fonts/lumi_d96.c --font <node_modules>/@fontsource/inter/files/inter-latin-600-normal.woff -r 0x20,0x2D,0x30-0x3A,0xB0
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

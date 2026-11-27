@@ -1,7 +1,18 @@
 // Dokument dla urządzenia = ustawienia + numer wersji + kto i co zmienił.
-import type { Settings } from "./schema";
+import type { Media, Settings } from "./schema";
 
-export type DeviceConfig = Omit<Settings, "sound"> & {
+// Urządzenie nie potrzebuje adresu kanału podcastu - dostaje gotową listę odcinków (jak playlistę)
+export type DeviceMedia =
+  | Exclude<Media, { type: "podcast" }>
+  | { type: "podcast"; name: string; urls: string[]; titles: string[] };
+
+export function deviceMedia(m: Media): DeviceMedia {
+  if (m.type !== "podcast") return m;
+  return { type: "podcast", name: m.name, urls: m.episodes.map((e) => e.url), titles: m.episodes.map((e) => e.title) };
+}
+
+export type DeviceConfig = Omit<Settings, "sound" | "media"> & {
+  media: DeviceMedia[];
   version: number;
   changedBy: string;
   changeText: string;
@@ -16,6 +27,7 @@ export function buildDeviceConfig(s: Settings, version: number, changedBy: strin
     changeText,
     ...s,
     contacts: s.contacts.map((c) => ({ ...c, number: c.number.replace(/\s+/g, "") })),
+    media: s.media.map(deviceMedia),
     sound: quiet ? { ...sound, quiet } : sound,
   };
 }

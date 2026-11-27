@@ -13,7 +13,7 @@ Przykład: [`data/config.json`](../data/config.json). Brakujące pola dostają w
 | `calls.onlyContacts` | false | odrzucaj numery spoza listy (ochrona przed oszustami "na wnuczka") |
 | `home.slots[3]` | - | co jest przy 3 prawych przyciskach na ekranie głównym: `contact:<id>`, `media`, `weather` albo pusty |
 | `home.partOfDay` | true | "Wtorek wieczorem" zamiast samego "Wtorek" |
-| `media[]` | - | `{type:"fm", name, freq}`, `{type:"web", name, url}`, `{type:"playlist", name, from, urls[]}` |
+| `media[]` | - | `{type:"fm", name, freq}`, `{type:"web", name, url}`, `{type:"playlist", name, from, urls[]}`, `{type:"podcast", name, urls[], titles[]}` (odcinki od najnowszego; aplikacja pobiera je z kanału RSS i sama odświeża) |
 | `weather.place / lat / lon` | Warszawa | współrzędne podaje aplikacja |
 | `display.textSize` | 0 | 0 normalny, 1 duży, 2 bardzo duży |
 | `display.highContrast` | false | biel na czerni, grube obramowania |

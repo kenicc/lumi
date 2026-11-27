@@ -53,6 +53,18 @@
       "urls": [
         "https://example.com/a.mp3"
       ]
+    },
+    {
+      "type": "podcast",
+      "name": "Audycje",
+      "urls": [
+        "https://cdn.example.com/e2.mp3",
+        "https://cdn.example.com/e1.mp3"
+      ],
+      "titles": [
+        "Odcinek 2",
+        "Odcinek 1"
+      ]
     }
   ],
   "weather": {

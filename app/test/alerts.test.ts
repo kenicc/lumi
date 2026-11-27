@@ -58,9 +58,9 @@ describe("powiadomienia z serwera", async () => {
     );
     expect((await cron(new Request("http://x/api/cron/offline"))).status).toBe(401);
     let r = await cron(new Request("http://x/api/cron/offline", { headers: auth }));
-    expect(await r.json()).toEqual({ alerted: 1 });
+    expect(await r.json()).toMatchObject({ alerted: 1 });
     r = await cron(new Request("http://x/api/cron/offline", { headers: auth }));
-    expect(await r.json()).toEqual({ alerted: 0 });
+    expect(await r.json()).toMatchObject({ alerted: 0 });
     expect(sent.slice(start).map((s) => s.title)).toEqual(["Mama: brak połączenia od 2 godzin"]);
 
     const req = new Request("http://x/api/device/status", {

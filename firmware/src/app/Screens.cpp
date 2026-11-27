@@ -379,7 +379,8 @@ void renderHome() {
       }
       case cfg::SlotKind::Media:
         if (mediaOn() && !C.mediaList.empty()) {
-          bool music = C.mediaList[mediaIdx].type == cfg::MediaType::Playlist;
+          bool music = C.mediaList[mediaIdx].type == cfg::MediaType::Playlist ||
+                       C.mediaList[mediaIdx].type == cfg::MediaType::Podcast;
           ui::setRail(i, playing ? IC_PAUSE : IC_MUSIC, playing ? "Gra" : (music ? "Muzyka" : "Radio"),
                       playing ? ui::Tone::Accent : ui::Tone::Neutral);
         } else {
@@ -446,16 +447,22 @@ void renderMedia() {
   bool playing = current && as.playing;
 
   lv_obj_t* col = ui::column(ui::content(), 4);
-  const char* icon = m.type == cfg::MediaType::Fm ? IC_RADIO : m.type == cfg::MediaType::Web ? IC_GLOBE : IC_MUSIC;
+  const char* icon = m.type == cfg::MediaType::Fm        ? IC_RADIO
+                     : m.type == cfg::MediaType::Web     ? IC_GLOBE
+                     : m.type == cfg::MediaType::Podcast ? IC_PODCAST
+                                                         : IC_MUSIC;
   ui::label(col, F.iconBig, playing ? P.accent : P.dim, icon);
   ui::label(col, ui::titleFont(m.name.c_str()), P.text, m.name.c_str(), true);
-  char b[64];
+  char b[112];  // tytuł odcinka podcastu do 80 znaków
   if (m.type == cfg::MediaType::Fm) {
     char fr[12];
     fmtFreq(m.freq, fr, sizeof fr);
     snprintf(b, sizeof b, "Radio FM %s", fr);
   } else if (m.type == cfg::MediaType::Web) {
     strlcpy(b, "Radio z internetu", sizeof b);
+  } else if (m.type == cfg::MediaType::Podcast) {
+    // najnowszy odcinek - senior wie, czego posłucha
+    snprintf(b, sizeof b, "Najnowszy: %s", m.titles.empty() ? "odcinek" : m.titles[0].c_str());
   } else if (!m.from.empty()) {
     snprintf(b, sizeof b, "Muzyka od: %s", m.from.c_str());
   } else {

@@ -131,6 +131,12 @@ bool parse(const char* json, size_t len, Config& out, std::string& err) {
       m.type = MediaType::Playlist;
       for (JsonVariantConst u : o["urls"].as<JsonArrayConst>()) m.urls.push_back(str(u));
       if (m.urls.empty()) continue;
+    } else if (!strcmp(t, "podcast")) {
+      // odcinki przygotowuje serwer z kanału RSS (app/src/lib/podcast.ts); gramy jak playlistę
+      m.type = MediaType::Podcast;
+      for (JsonVariantConst u : o["urls"].as<JsonArrayConst>()) m.urls.push_back(str(u));
+      for (JsonVariantConst t2 : o["titles"].as<JsonArrayConst>()) m.titles.push_back(str(t2));
+      if (m.urls.empty()) continue;
     } else {
       continue;
     }
