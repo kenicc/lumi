@@ -9,6 +9,7 @@
 #include "core/ButtonFilter.h"
 #include "core/Calendar.h"
 #include "core/Config.h"
+#include "core/LocalEdit.h"
 #include "core/Pairing.h"
 #include "core/ReminderQueue.h"
 #include "core/RtcCodec.h"
@@ -356,6 +357,66 @@ static void test_rtc_codec() {
   TEST_ASSERT_FALSE(rtcc::decode(junk, back));
 }
 
+void test_local_edit() {
+  using namespace local;
+  std::string doc, out, err;
+  // nowe urządzenie bez aplikacji: pierwszy kontakt tworzy dokument, który czyta zwykły parser
+  Op add;
+  add.kind = Kind::AddContact;
+  add.id = "d1";
+  add.name = "Córka Ania";
+  add.number = "+48 600-100-200";
+  TEST_ASSERT_TRUE(apply(doc, add, out, err));
+  cfg::Config c;
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(0, c.version);
+  TEST_ASSERT_EQUAL(1, (int)c.contacts.size());
+  TEST_ASSERT_EQUAL_STRING("+48600100200", c.contacts[0].number.c_str());
+  TEST_ASSERT_EQUAL_STRING("Córka Ania", c.contacts[0].name.c_str());
+  doc = out;
+  // ten sam numer drugi raz, zły numer, za długie imię - odrzucone, dokument bez zmian
+  add.id = "d2";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.number = "12a45";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.number = "601200300";
+  add.name = "Bardzo długie imię ponad limit znaków";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.name = "Józef";
+  TEST_ASSERT_TRUE(apply(doc, add, out, err));
+  doc = out;
+  // usunięcie czyści też skrót na ekranie głównym
+  std::string withSlot = "{\"version\":7,\"contacts\":[{\"id\":\"a\",\"name\":\"A\",\"number\":\"600100200\"}],"
+                         "\"home\":{\"slots\":[\"contact:a\",\"media\",\"\"]},\"changedBy\":\"Ania\"}";
+  Op rm;
+  rm.kind = Kind::RemoveContact;
+  rm.id = "a";
+  TEST_ASSERT_TRUE(apply(withSlot, rm, out, err));
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(7, c.version);  // wersja rodziny zostaje
+  TEST_ASSERT_EQUAL(0, (int)c.contacts.size());
+  TEST_ASSERT_TRUE(c.changedBy.empty());  // to nie zmiana od rodziny
+  rm.id = "nie-ma";
+  TEST_ASSERT_FALSE(apply(withSlot, rm, out, err));
+  // wielkość tekstu i dzwonek w zakresie
+  Op ts;
+  ts.kind = Kind::TextSize;
+  ts.value = 2;
+  TEST_ASSERT_TRUE(apply(doc, ts, out, err));
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(2, c.textSize);
+  ts.value = 3;
+  TEST_ASSERT_FALSE(apply(doc, ts, out, err));
+  Op rv;
+  rv.kind = Kind::RingVolume;
+  rv.value = 0;
+  TEST_ASSERT_FALSE(apply(doc, rv, out, err));
+  // zdarzenie dla serwera
+  TEST_ASSERT_EQUAL_STRING("{\"type\":\"setting\",\"op\":\"removeContact\",\"id\":\"nie-ma\"}", eventJson(rm).c_str());
+  TEST_ASSERT_EQUAL_STRING("", normalizeNumber("+48+600").c_str());
+  TEST_ASSERT_EQUAL(5u, utf8Len("Józef"));
+}
+
 void test_weather_fresh() {
   wx::Forecast f;
   f.valid = true;
@@ -430,6 +491,7 @@ int main() {
   RUN_TEST(test_reminder_queue);
   RUN_TEST(test_due_window);
   RUN_TEST(test_weather_fresh);
+  RUN_TEST(test_local_edit);
   RUN_TEST(test_contract);
   RUN_TEST(test_rtc_codec);
   return UNITY_END();
