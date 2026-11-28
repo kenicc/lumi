@@ -484,8 +484,14 @@ void task(void*) {
 
     uint32_t now = millis();
     if (cs == CallState::Incoming && !incomingPosted && now - csSince > 1500) {
-      incomingPosted = true;  // RING bez +CLIP: numer zastrzeżony
-      bus::post(Event(Ev::CallIncoming, 0, 0, ""));
+      // +CLIP się spóźnia: najpierw numer z listy połączeń. Bez tego rodzina byłaby wzięta za numer
+      // zastrzeżony i przy "odbieraj tylko od kontaktów" odrzucona.
+      lastClcc = now;
+      pollCalls();
+      if (cs == CallState::Incoming && !incomingPosted) {
+        incomingPosted = true;  // ani +CLIP, ani numeru w CLCC: numer zastrzeżony
+        bus::post(Event(Ev::CallIncoming, 0, 0, ""));
+      }
     }
     if (cs != CallState::Idle && now - lastClcc > 1000) {
       lastClcc = now;

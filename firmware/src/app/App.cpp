@@ -612,13 +612,13 @@ void onWheel(int d) {
 
 void onIncoming(const char* num) {
   if (selftest::active()) selftest::stop();  // rozmowa ważniejsza niż test
+  if (call.phase != Phase::None) return;  // ATH rozłączyłby też trwającą rozmowę
   int k = C.contactIndexByNumber(num);
   if (C.onlyContacts && k < 0) {
     modem::hangup();
     Serial.println("[rozmowa] odrzucono numer spoza listy kontaktów");
     return;
   }
-  if (call.phase != Phase::None) return;
   if (ui::noticeVisible()) {  // rozmowa ma pierwszeństwo, komunikat wróci po niej
     notices.push_front(shownNotice);
     ui::dismissNotice();
