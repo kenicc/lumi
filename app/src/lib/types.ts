@@ -4,6 +4,8 @@ export type Role = "guardian" | "family" | "friend";
 
 export interface DeviceStatus {
   alertLevel?: number;  // serwer: najniższy zgłoszony próg baterii (lib/alerts.ts), nie od urządzenia
+  lostAt?: string;         // serwer: od kiedy brak zasięgu
+  signalAlerted?: boolean; // serwer: brak zasięgu już zgłoszony w tej przerwie
   version?: number;
   battery?: number;
   batteryMv?: number;

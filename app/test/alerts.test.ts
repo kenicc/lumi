@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { batteryAlert, statusAlerts } from "@/lib/alerts";
+import { batteryAlert, signalAlert, statusAlerts } from "@/lib/alerts";
 import type { DeviceStatus } from "@/lib/types";
 import { memoryDb as fakeDb } from "@/lib/memoryDb";
 
@@ -34,7 +34,18 @@ describe("statusAlerts", () => {
   });
   it("karta SIM i zasięg", () => {
     expect(statusAlerts({ sim: true, registered: true }, { sim: false }, "Mama")[0].title).toContain("brak karty SIM");
-    expect(statusAlerts({ sim: true, registered: true }, { sim: true, registered: false }, "Mama")[0].title).toContain("brak zasięgu");
+    // brak zasięgu: dopiero po 10 minutach i raz na przerwę
+    const t0 = Date.parse("2026-11-25T10:00:00Z");
+    const lost = { sim: true, registered: false };
+    expect(statusAlerts({ sim: true, registered: true }, lost, "Mama", t0)).toHaveLength(0);
+    const s1 = { ...lost, ...signalAlert({ sim: true, registered: true }, lost, t0) };
+    const p1: DeviceStatus = { ...lost, lostAt: s1.lostAt, signalAlerted: s1.alerted };
+    expect(statusAlerts(p1, lost, "Mama", t0 + 5 * 60_000)).toHaveLength(0);
+    expect(statusAlerts(p1, lost, "Mama", t0 + 10 * 60_000)[0].title).toContain("brak zasięgu");
+    const p2: DeviceStatus = { ...p1, signalAlerted: true };
+    expect(statusAlerts(p2, lost, "Mama", t0 + 20 * 60_000)).toHaveLength(0);
+    // zasięg wrócił na chwilę - nowa przerwa liczy się od nowa
+    expect(signalAlert(p2, { sim: true, registered: true }, t0 + 21 * 60_000)).toMatchObject({ alerted: false, lostAt: undefined });
     expect(statusAlerts(null, { sim: true, registered: false }, "Mama")).toHaveLength(0); // pierwszy raport po starcie
   });
 });

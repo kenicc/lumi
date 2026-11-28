@@ -1,7 +1,7 @@
 // Stan urządzenia widoczny dla rodziny. Bez lokalizacji i bez historii słuchania (dokumentacja v2.0).
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { backOnlineAlert, batteryAlert, statusAlerts } from "@/lib/alerts";
+import { backOnlineAlert, batteryAlert, signalAlert, statusAlerts } from "@/lib/alerts";
 import { authDevice } from "@/lib/deviceAuth";
 import { notifyDevice } from "@/lib/push";
 import { admin } from "@/lib/supabase/admin";
@@ -40,7 +40,10 @@ export async function POST(req: Request) {
   await admin()
     .from("devices")
     .update({
-      status: { ...s, alertLevel: batteryAlert(d.status, s).level },
+      status: (() => {
+        const sig = signalAlert(d.status, s);
+        return { ...s, alertLevel: batteryAlert(d.status, s).level, lostAt: sig.lostAt, signalAlerted: sig.alerted };
+      })(),
       applied_version: Math.min(s.version, d.config_version),
       fw: s.fw ?? d.fw,
       fw_build: s.build ?? d.fw_build,

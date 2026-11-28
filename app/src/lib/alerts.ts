@@ -36,15 +36,29 @@ export function batteryAlert(prev: DeviceStatus | null, next: DeviceStatus): { l
   return crossed === undefined ? { level, alert: null } : { level: crossed, alert: crossed };
 }
 
-export function statusAlerts(prev: DeviceStatus | null, next: DeviceStatus, name: string): Alert[] {
+export function statusAlerts(prev: DeviceStatus | null, next: DeviceStatus, name: string, now = Date.now()): Alert[] {
   const out: Alert[] = [];
   if (batteryAlert(prev, next).alert !== null)
     out.push({ title: `${name}: słaba bateria (${Math.round(next.battery!)}%)`, body: "Przypomnij o podłączeniu ładowarki - rozładowane LUMI nie odbierze rozmowy." });
   if (prev?.sim !== false && next.sim === false)
     out.push({ title: `${name}: brak karty SIM`, body: "LUMI nie może dzwonić ani odbierać rozmów. Sprawdź kartę SIM." });
-  if (prev?.registered !== false && next.registered === false && next.sim !== false && prev)
-    out.push({ title: `${name}: brak zasięgu`, body: "LUMI nie łączy się z siecią komórkową. Rozmowy nie dochodzą." });
+  if (signalAlert(prev, next, now).alert)
+    out.push({ title: `${name}: brak zasięgu`, body: "LUMI nie łączy się z siecią komórkową od 10 minut. Rozmowy nie dochodzą." });
   return out;
+}
+
+export const NO_SIGNAL_ALERT_MS = 10 * 60 * 1000;
+
+/**
+ * Brak zasięgu zgłaszamy dopiero po 10 minutach i raz na przerwę: chwilowa utrata sieci (zmiana
+ * stacji, winda) nie może budzić rodziny. Stan trzyma serwer w statusie (lostAt, signalAlerted).
+ */
+export function signalAlert(prev: DeviceStatus | null, next: DeviceStatus, now = Date.now()) {
+  if (next.registered !== false || next.sim === false) return { lostAt: undefined, alerted: false, alert: false };
+  const lostAt = prev?.registered === false && prev.lostAt ? prev.lostAt : new Date(now).toISOString();
+  const already = prev?.registered === false && !!prev.signalAlerted;
+  const alert = !already && now - Date.parse(lostAt) >= NO_SIGNAL_ALERT_MS;
+  return { lostAt, alerted: already || alert, alert };
 }
 
 export function offlineAlert(name: string): Alert {
