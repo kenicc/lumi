@@ -163,6 +163,31 @@ describe("API urządzenia", () => {
     expect(db.tables.reminder_events).toHaveLength(2);
   });
 
+  it("ustawienia z menu LUMI: migawka przed parowaniem, zdarzenie po parowaniu", async () => {
+    const local = { contacts: [{ id: "d1", name: "Córka", number: "605333444" }], textSize: 1 };
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR, local }));
+    expect(db.tables.devices[0].local_settings).toMatchObject(local);
+    // po sparowaniu: senior dodaje osobę na LUMI, rodzina widzi to w aplikacji
+    const { sample } = await import("./fixtures");
+    db.tables.members.push({ device_id: ID, user_id: "u1", role: "guardian" });
+    Object.assign(db.tables.devices[0], { name: "Mama", settings: sample(), config: { version: 5 }, config_version: 5 });
+    const e = { type: "setting", op: "addContact", id: "d9", name: "Wnuczka", number: "605999888" };
+    let r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ ok: true, saved: true });
+    const dev = db.tables.devices[0] as { config_version: number; settings: { contacts: { name: string }[] }; config: { changedBy: string } };
+    expect(dev.config_version).toBe(6);
+    expect(dev.settings.contacts.at(-1)?.name).toBe("Wnuczka");
+    expect(dev.config.changedBy).toBe("");  // LUMI nie pokaże seniorowi jego własnej zmiany
+    expect(db.tables.changes.at(-1)).toMatchObject({ author: "Mama (na urządzeniu)", version: 6 });
+    // ponowione (zgubiona odpowiedź): bez drugiej wersji
+    r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ saved: false });
+    expect(dev.config_version).toBe(6);
+    // zła operacja
+    r = await event(post("/api/device/event", { type: "setting", op: "textSize", value: 9 }));
+    expect(r.status).toBe(400);
+  });
+
   it("odrzuca zły format danych", async () => {
     const r = await hello(post("/api/device/hello", { id: "LUMI-zz", secret: "x", pair: "1" }));
     expect(r.status).toBe(400);

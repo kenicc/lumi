@@ -42,6 +42,7 @@ Settings cfgNet;
 bool cfgDirty = true;
 std::atomic<bool> scanReq{false};
 std::atomic<bool> endProvision{false};
+std::atomic<bool> helloAgain{false};  // zmiana ustawień na niesparowanym LUMI: wyślij nową migawkę
 bool scanning = false;
 uint32_t scanStarted = 0;
 std::vector<std::string> scanList;  // chroniona przez mtx
@@ -376,6 +377,25 @@ void hello(const Settings& s) {
   d["variant"] = LUMI_VARIANT;
   d["fw"] = LUMI_FW_VERSION;
   d["build"] = LUMI_FW_BUILD;
+  // ustawione na samym LUMI przed parowaniem: aplikacja przejmie kontakty, tekst i dzwonek
+  if (s.version == 0 && s.configured) {
+    File f = LittleFS.open("/config.json", "r");
+    JsonDocument c;
+    if (f && !deserializeJson(c, f)) {
+      JsonObject local = d["local"].to<JsonObject>();
+      JsonArray out = local["contacts"].to<JsonArray>();
+      for (JsonObject k : c["contacts"].as<JsonArray>()) {
+        if (out.size() >= 30) break;
+        JsonObject o = out.add<JsonObject>();
+        o["id"] = k["id"];
+        o["name"] = k["name"];
+        o["number"] = k["number"];
+      }
+      if (!c["display"]["textSize"].isNull()) local["textSize"] = c["display"]["textSize"];
+      if (!c["sound"]["ringVolume"].isNull()) local["ringVolume"] = c["sound"]["ringVolume"];
+    }
+    if (f) f.close();
+  }
   String b;
   serializeJson(d, b);
   Resp r = request("POST", "/api/device/hello", b, s.version);
@@ -739,6 +759,7 @@ void task(void*) {
   for (;;) {
     serviceScan();
     if (endProvision.exchange(false) && web) provisionUntil = millis();
+    if (helloAgain.exchange(false)) helloDone = false;
     if (web) {  // tryb konfiguracji Wi-Fi
       dns->processNextRequest();
       web->handleClient();
@@ -882,6 +903,7 @@ void apply(const Settings& s) {
   cfgDirty = true;
   xSemaphoreGive(mtx);
   if (coordsChanged) weatherReq = true;
+  if (s.version == 0 && s.configured) helloAgain = true;
   if (versionChanged) reportReq = true;  // rodzina widzi w aplikacji, że zmiana dotarła
   if (versionChanged) photosDirty = true;
 }

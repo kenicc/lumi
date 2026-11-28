@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authDevice } from "@/lib/deviceAuth";
+import { SettingOpSchema } from "@/lib/deviceSettings";
+import { saveDeviceOp } from "@/lib/deviceSettingsStore";
 import { notifyDevice } from "@/lib/push";
 import { currentSettings } from "@/lib/store";
 import { admin } from "@/lib/supabase/admin";
@@ -20,7 +22,9 @@ const MessageRead = z.object({
   status: z.literal("read"),
   at: z.number().int().optional(),
 });
-const Body = z.discriminatedUnion("type", [Reminder, MessageRead]);
+// zmiana zrobiona w menu LUMI (sparowane urządzenie); szczegóły sprawdza SettingOpSchema
+const Setting = z.object({ type: z.literal("setting"), op: z.string() }).passthrough();
+const Body = z.discriminatedUnion("type", [Reminder, MessageRead, Setting]);
 
 // czas z urządzenia tylko gdy wiarygodny (nie z przyszłości, nie sprzed tygodnia)
 function eventTime(at?: number) {
@@ -34,6 +38,12 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
   const e = parsed.data;
+  if (e.type === "setting") {
+    const op = SettingOpSchema.safeParse(e);
+    if (!op.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
+    const saved = await saveDeviceOp(d.id, d.name, op.data);
+    return NextResponse.json({ ok: true, saved });
+  }
   const at = eventTime(e.at);
   if (e.type === "message") {
     // tylko wiadomości tego urządzenia; pierwsze potwierdzenie wygrywa

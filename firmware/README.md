@@ -43,7 +43,11 @@ sim/build.sh                   # symulator: asercje zachowania + porównanie ekr
 UPDATE_GOLDEN=1 sim/build.sh   # po zamierzonej zmianie wyglądu: zapisz nowe wzorce
 ```
 
-Pierwsze uruchomienie bez konfiguracji prowadzi przez dwa kroki na ekranie: kod QR sieci LUMI (telefon podaje domowe Wi-Fi na stronie 192.168.4.1), potem kod QR parowania z aplikacją rodziny (`../app`). Adres aplikacji: flaga `LUMI_SERVER` w `platformio.ini`, strona 192.168.4.1 albo konsola `server <adres>`.
+Pierwsze uruchomienie bez konfiguracji daje dwie drogi:
+- **z telefonem**: kod QR sieci LUMI (telefon podaje domowe Wi-Fi na stronie 192.168.4.1), potem kod QR parowania z aplikacją rodziny (`../app`);
+- **bez telefonu**: zielony Dzwoń ("Ustaw bez telefonu") otwiera menu ustawień na samym LUMI.
+
+Adres aplikacji: flaga `LUMI_SERVER` w `platformio.ini`, strona 192.168.4.1 albo konsola `server <adres>`.
 
 Bez aplikacji: wpisz Wi-Fi i numery w `data/config.json` (opis pól: [docs/config.md](docs/config.md)) i wgraj `uploadfs`.
 
@@ -65,7 +69,25 @@ Do tego etapu wystarczy DevKit + płytka modemu + karta SIM, bez ekranu i przyci
 
 Interfejs da się testować bez przylutowanych przycisków: `key call`, `key mid`, `key power long`, `wheel 2`.
 
-Przytrzymanie Home przez 5 s otwiera ekran serwisowy dla rodziny: informacje o połączeniu, kod parowania (gdy LUMI zostało usunięte z aplikacji) i przycisk "Wi-Fi" uruchamiający sieć LUMI do podania nowej sieci (np. po przeprowadzce).
+### Ustawienia na samym LUMI (bez telefonu)
+
+Przytrzymany Dom otwiera menu ustawień (`src/app/Setup.cpp`):
+
+| Pozycja | Co robi |
+| --- | --- |
+| Wi-Fi | lista widocznych sieci, hasło wpisywane rolką; albo "Ustaw telefonem" (kod QR, strona 192.168.4.1) |
+| Kontakty | z karty SIM (polskie litery, bez duplikatów), dodanie numeru rolką z imieniem z listy (Córka, Syn, Wnuczka...) albo wpisanym, usunięcie z potwierdzeniem |
+| Wielkość tekstu, Dzwonek | zmiana od razu |
+| Aplikacja rodziny | kod QR parowania |
+| Informacje | id, Wi-Fi, serwer, modem |
+
+Sterowanie wszędzie takie samo: rolka albo górny/dolny przesuwa, środkowy wybiera, zielony Dzwoń = gotowe, Dom = wstecz (przytrzymany: do zegara).
+
+LUMI działa w pełni bez aplikacji. Zmiany są operacjami (`src/core/LocalEdit.h`):
+- **bez parowania** trafiają tylko do `/config.json`; przy parowaniu aplikacja przejmuje kontakty, wielkość tekstu i dzwonek zamiast zaczynać od pustej listy;
+- **po sparowaniu** ta sama zmiana idzie też do serwera i nakłada się na aktualne ustawienia rodziny (w historii: "Mama (na urządzeniu) dodaje kontakt ...").
+
+Hasło Wi-Fi zostaje w urządzeniu i nie trafia na serwer.
 
 ## Oszczędzanie energii
 

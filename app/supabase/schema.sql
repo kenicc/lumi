@@ -68,6 +68,8 @@ alter table changes enable row level security;
 -- Zmiany schematu po pierwszej wersji (bezpieczne do ponownego uruchomienia)
 alter table devices add column if not exists fw_build int not null default 0;
 alter table devices add column if not exists offline_alerted boolean not null default false;
+-- ustawienia zrobione na samym LUMI przed parowaniem (kontakty, tekst, dzwonek) - parowanie zaczyna od nich
+alter table devices add column if not exists local_settings jsonb;
 
 -- Wiadomości od rodziny (krótki tekst na ekranie LUMI, z potwierdzeniem przeczytania)
 create table if not exists messages (
