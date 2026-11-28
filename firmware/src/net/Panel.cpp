@@ -3,6 +3,12 @@
 
 #ifdef LUMI_WEB_PANEL
 
+// Panel nie ma logowania: każdy w sieci domowej mógłby dzwonić z LUMI i czytać ekran (kontakty,
+// wiadomości). Do urządzenia dla seniora nie może trafić.
+#ifdef LUMI_VARIANT_SERIES
+#error "LUMI_WEB_PANEL to narzędzie prototypu - nie włączaj go w wersji series"
+#endif
+
 #include <Arduino.h>
 #include <Preferences.h>
 #include <WebServer.h>

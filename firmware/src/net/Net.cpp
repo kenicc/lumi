@@ -31,6 +31,10 @@ extern "C" const uint8_t lumi_ca_bundle[];
 
 namespace net {
 
+#if defined(LUMI_ALLOW_HTTP) && defined(LUMI_VARIANT_SERIES)
+#error "LUMI_ALLOW_HTTP (sekret urządzenia otwartym tekstem) tylko do testów w sieci domowej, nie w wersji series"
+#endif
+
 namespace {
 
 SemaphoreHandle_t mtx;
