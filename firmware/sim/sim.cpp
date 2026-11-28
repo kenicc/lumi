@@ -487,6 +487,19 @@ int main() {
   shot("31_test_bledy");
   key(Key::Home);
   check(!selftest::active(), "test sprzętu zakończony");
+
+  // LUMI usunięte z aplikacji: w trakcie rozmowy nic się nie dzieje, po niej - powrót do parowania
+  bus::post(Event(Ev::CallIncoming, 0, 0, "+48601200300"));
+  run(300);
+  bus::post(Event(Ev::Unpaired));
+  run(300);
+  check(app::configured(), "usunięcie z aplikacji nie przerywa rozmowy");
+  bus::post(Event(Ev::CallEnded, 0));
+  run(300);
+  bus::post(Event(Ev::Unpaired));
+  run(300);
+  check(!app::configured() && D::scr == Screen::Unpaired, "usunięte z aplikacji: ustawienia skasowane, ekran parowania");
+  check(!app::reloadConfig(false), "plik konfiguracji usunięty z dysku");
   printf("asercje: %s\n", failures ? "BLEDY" : "wszystkie OK");
   return failures ? 1 : 0;
 }

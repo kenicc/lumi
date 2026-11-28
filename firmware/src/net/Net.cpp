@@ -337,6 +337,28 @@ Resp request(const char* method, const char* path, const String& body, int versi
   return r;
 }
 
+// Usunięcie z aplikacji: serwer mówi "nikt nie dodał tego LUMI", a my mamy ustawienia z
+// poprzedniego parowania. Kasujemy je dopiero, gdy słyszymy to kilka razy z rzędu przez co
+// najmniej minutę - pojedyncza dziwna odpowiedź nie może wyczyścić seniorowi kontaktów.
+constexpr uint8_t UNPAIR_HITS = 3;
+constexpr uint32_t UNPAIR_AFTER_MS = 60 * 1000UL;
+uint8_t unclaimedHits = 0;
+uint32_t unclaimedSince = 0;
+
+void noteClaimed(bool claimed, const Settings& s) {
+  if (claimed || s.version == 0) {
+    unclaimedHits = 0;
+    return;
+  }
+  if (unclaimedHits == 0) unclaimedSince = millis();
+  if (unclaimedHits < 255) unclaimedHits++;
+  if (unclaimedHits >= UNPAIR_HITS && millis() - unclaimedSince >= UNPAIR_AFTER_MS) {
+    unclaimedHits = 0;
+    diag::error("[serwer] LUMI usunieto z aplikacji - powrot do parowania");
+    bus::post(Event(Ev::Unpaired));
+  }
+}
+
 void hello(const Settings& s) {
   JsonDocument d;
   d["id"] = identity::id();
@@ -351,8 +373,10 @@ void hello(const Settings& s) {
   if (r.code == 200) {
     helloDone = true;
     JsonDocument o;
-    deserializeJson(o, r.body);
-    setCloud((o["claimed"] | false) ? Cloud::Ok : Cloud::Unclaimed);
+    bool parsed = deserializeJson(o, r.body) == DeserializationError::Ok;
+    bool claimed = parsed && (o["claimed"] | false);
+    if (parsed) noteClaimed(claimed, s);  // nieczytelna odpowiedź nic nie mówi o parowaniu
+    setCloud(claimed ? Cloud::Ok : Cloud::Unclaimed);
   } else if (r.code == 401 || r.code == 403) {
     setCloud(Cloud::AuthError);
     diag::error("[serwer] sekret odrzucony");
@@ -366,10 +390,16 @@ void syncConfig(const Settings& s) {
   Resp r = request("GET", "/api/device/config", "", s.version);
   if (r.code > 0) inboxTop = r.inbox;
   if (r.code == 304) {
+    noteClaimed(true, s);
     setCloud(Cloud::Ok);
     return;
   }
-  if (r.code == 404 || r.code == 409) {
+  if (r.code == 409) {
+    noteClaimed(false, s);
+    setCloud(Cloud::Unclaimed);
+    return;
+  }
+  if (r.code == 404) {  // inny serwer albo zła ścieżka - nie traktujemy jako usunięcia
     setCloud(Cloud::Unclaimed);
     return;
   }
@@ -382,6 +412,7 @@ void syncConfig(const Settings& s) {
     setCloud(Cloud::Offline);
     return;
   }
+  noteClaimed(true, s);
   setCloud(Cloud::Ok);
   // sprawdzamy dokument tym samym parserem co przy starcie - zły plik nie trafi na dysk
   cfg::Config test;

@@ -21,8 +21,11 @@ export async function POST(req: Request) {
   const db = admin();
   const { data: existing } = await db.from("devices").select("id, secret_hash").eq("id", id).maybeSingle();
   const now = new Date().toISOString();
+  // wersja ustawień, którą LUMI ma na dysku: po ponownym parowaniu numeracja idzie dalej od niej,
+  // inaczej urządzenie uznałoby nowe ustawienia (od wersji 1) za starsze od swoich
+  const has = Math.max(0, Math.min(2_000_000_000, Math.trunc(Number(req.headers.get("x-lumi-version")) || 0)));
   if (!existing) {
-    const { error } = await db.from("devices").insert({ id, secret_hash: sha256(secret), pair_hash: sha256(pair), variant, fw, fw_build: build ?? 0, last_seen: now });
+    const { error } = await db.from("devices").insert({ id, secret_hash: sha256(secret), pair_hash: sha256(pair), variant, fw, fw_build: build ?? 0, last_seen: now, applied_version: has });
     if (error) return NextResponse.json({ error: "db" }, { status: 500 });
     return NextResponse.json({ claimed: false });
   }
@@ -31,7 +34,7 @@ export async function POST(req: Request) {
   const claimed = await isClaimed(id);
   await db
     .from("devices")
-    .update({ variant, fw, fw_build: build ?? 0, last_seen: now, ...(claimed ? {} : { pair_hash: sha256(pair) }) })
+    .update({ variant, fw, fw_build: build ?? 0, last_seen: now, ...(claimed ? {} : { pair_hash: sha256(pair), applied_version: has }) })
     .eq("id", id);
   return NextResponse.json({ claimed });
 }

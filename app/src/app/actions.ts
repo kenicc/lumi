@@ -95,10 +95,13 @@ export async function claim(fd: FormData) {
     settings.home.slots[0] = `contact:${id}`;
   }
   const summary = pairedText(profile.form);
-  const config = buildDeviceConfig(settings, 1, profile.display_name, summary);
+  // LUMI mogło mieć ustawienia z poprzedniego parowania - nowa wersja musi być od nich wyższa
+  const { data: prevRow } = await db.from("devices").select("applied_version").eq("id", deviceId).single();
+  const version = ((prevRow as { applied_version: number | null } | null)?.applied_version ?? 0) + 1;
+  const config = buildDeviceConfig(settings, version, profile.display_name, summary);
   const name = str(fd, "name").slice(0, 40) || "LUMI";
   await db.from("members").insert({ device_id: deviceId, user_id: user.id, role: "guardian" });
-  await db.from("devices").update({ name, settings, config, config_version: 1, applied_version: 0 }).eq("id", deviceId);
-  await db.from("changes").insert({ device_id: deviceId, user_id: user.id, author: profile.display_name, summary, version: 1 });
+  await db.from("devices").update({ name, settings, config, config_version: version }).eq("id", deviceId);
+  await db.from("changes").insert({ device_id: deviceId, user_id: user.id, author: profile.display_name, summary, version });
   redirect(`/d/${deviceId}?ok=1`);
 }

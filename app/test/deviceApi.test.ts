@@ -75,6 +75,28 @@ describe("API urządzenia", () => {
     expect(await r.json()).toEqual({ claimed: true });
   });
 
+  it("po usunięciu z aplikacji i ponownym parowaniu wersje idą dalej, a nie od 1", async () => {
+    // LUMI ma na dysku ustawienia w wersji 15, a jego wiersz został usunięty z aplikacji
+    let r: Response = await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }, headers(SECRET, 15)));
+    expect(await r.json()).toEqual({ claimed: false });
+    expect(db.tables.devices[0].applied_version).toBe(15);
+    r = await config(get("/api/device/config", headers(SECRET, 15)));
+    expect(r.status).toBe(409);  // urządzenie po kilku takich odpowiedziach wraca do parowania
+  });
+
+  it("serwer z niższą wersją niż LUMI (np. baza z kopii) podbija numer, zamiast odpowiadać 304", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }));
+    db.tables.members.push({ device_id: ID, user_id: "u1", role: "guardian" });
+    const { sample } = await import("./fixtures");
+    Object.assign(db.tables.devices[0], { settings: sample(), config: { version: 3 }, config_version: 3 });
+    let r = await config(get("/api/device/config", headers(SECRET, 9)));
+    expect(r.status).toBe(200);
+    expect((await r.json()).version).toBe(10);
+    expect(db.tables.devices[0].config_version).toBe(10);
+    r = await config(get("/api/device/config", headers(SECRET, 10)));
+    expect(r.status).toBe(304);
+  });
+
   it("aktualizacje: najnowsza aktywna wersja dla wariantu, nowsza niż zainstalowana", async () => {
     await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR, variant: "allegro", fw: "0.4.0", build: 4 }));
     let r = await firmware(get("/api/device/firmware"));

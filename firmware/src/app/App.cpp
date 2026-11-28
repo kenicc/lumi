@@ -703,6 +703,26 @@ bool loadFile(const char* path, cfg::Config& out) {
   return true;
 }
 
+// LUMI usunięte z aplikacji: kontakty, przypomnienia i zdjęcia poprzedniej rodziny nie mogą
+// zostać na urządzeniu (np. gdy trafi do kogoś innego). Sieć z pierwszego uruchomienia zostaje.
+void forgetConfig() {
+  if (!haveConfig) return;
+  if (call.phase != Phase::None) return;  // sieć zgłosi to ponownie po rozmowie
+  stopMedia();
+  LittleFS.remove("/config.json");
+  LittleFS.remove("/config.bak");
+  LittleFS.remove("/config.tmp");
+  C = cfg::Config{};
+  haveConfig = false;
+  inbox.clear();
+  reminders = rem::Queue{};
+  clearMissed();
+  ui::dismissNotice();
+  applyConfig();  // wersja 0 dla sieci, zdjęcia bez kontaktów się kasują
+  scr = Screen::Unpaired;
+  render();
+}
+
 bool loadConfig() {
   cfg::Config n;
   if (!loadFile("/config.json", n) && !loadFile("/config.bak", n)) return false;
@@ -856,6 +876,7 @@ void handle(const Event& e) {
       break;
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
+    case Ev::Unpaired: forgetConfig(); break;
     case Ev::MessagesArrived:
       for (auto& m : net::takeMessages()) {
         bool dup = false;

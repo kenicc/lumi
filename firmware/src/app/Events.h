@@ -27,6 +27,7 @@ enum class Ev : uint8_t {
   CloudState,     // a = net::Cloud (Wi-Fi, parowanie, serwer)
   PhotosUpdated,  // pobrano nowe zdjęcia kontaktów
   MessagesArrived,  // nowe wiadomości od rodziny (net::takeMessages)
+  Unpaired,         // serwer potwierdził, że LUMI usunięto z aplikacji: kasujemy ustawienia
 };
 
 struct Event {
