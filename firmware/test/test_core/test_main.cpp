@@ -138,6 +138,12 @@ void test_numbers() {
   TEST_ASSERT_TRUE(at::sameNumber("+48 600 100 200", "600100200"));
   TEST_ASSERT_TRUE(at::sameNumber("0048600100200", "+48600100200"));
   TEST_ASSERT_FALSE(at::sameNumber("600100201", "600100200"));
+  TEST_ASSERT_TRUE(at::sameNumber("48600100200", "600 100 200"));
+  TEST_ASSERT_TRUE(at::sameNumber("124", "124"));  // numer skrócony / serwisowy
+  // obcy numer z tą samą końcówką to nie ten kontakt
+  TEST_ASSERT_FALSE(at::sameNumber("+491701234567", "701234567"));
+  TEST_ASSERT_FALSE(at::sameNumber("+48701234567", "+49701234567"));
+  TEST_ASSERT_FALSE(at::sameNumber("", "600100200"));
   char out[24];
   at::formatNumber("+48600100200", out, sizeof out);
   TEST_ASSERT_EQUAL_STRING("600 100 200", out);

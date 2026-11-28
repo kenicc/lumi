@@ -114,24 +114,38 @@ bool parseCclk(const char* line, int64_t& utc) {
   return true;
 }
 
-static size_t lastDigits(const char* s, char* out, size_t want) {
-  char buf[32];
+// Numer w postaci pełnej z kierunkowym kraju, same cyfry: "+48 600 100 200", "0048600100200",
+// "48600100200" i "600100200" -> "48600100200". Numer bez kierunkowego traktujemy jako polski.
+static size_t canonical(const char* s, char* out, size_t cap) {
+  while (*s == ' ') s++;
+  bool intl = *s == '+';
+  char d[24];
   size_t n = 0;
-  for (; *s && n < sizeof(buf); s++)
-    if (isdigit((unsigned char)*s)) buf[n++] = *s;
-  size_t start = n > want ? n - want : 0;
-  size_t k = n - start;
-  memcpy(out, buf + start, k);
-  out[k] = 0;
-  return k;
+  for (; *s && n + 1 < sizeof(d); s++)
+    if (isdigit((unsigned char)*s)) d[n++] = *s;
+  d[n] = 0;
+  const char* p = d;
+  if (!intl && n > 2 && p[0] == '0' && p[1] == '0') {
+    intl = true;
+    p += 2;
+    n -= 2;
+  }
+  const char* cc = (!intl && n == 9) ? "48" : "";
+  size_t need = strlen(cc) + n;
+  if (need + 1 > cap) return 0;
+  strcpy(out, cc);
+  strcat(out, p);
+  return need;
 }
 
+// Cały numer, nie końcówka: przy porównaniu ostatnich cyfr niemiecki +49 170 1234567 "pasowałby"
+// do polskiego 701 234 567 - a od tego zależy auto-odbieranie i "tylko od kontaktów".
 bool sameNumber(const char* a, const char* b) {
   if (!a || !b) return false;
-  char x[16], y[16];
-  size_t nx = lastDigits(a, x, 9), ny = lastDigits(b, y, 9);
-  if (nx < 3 || ny < 3) return false;  // krótkie numery serwisowe porównuj w całości
-  return nx == ny && strcmp(x, y) == 0;
+  char x[24], y[24];
+  size_t nx = canonical(a, x, sizeof x), ny = canonical(b, y, sizeof y);
+  if (nx < 3 || ny < 3) return false;  // zastrzeżony albo pusty
+  return strcmp(x, y) == 0;
 }
 
 void formatNumber(const char* in, char* out, size_t n) {
