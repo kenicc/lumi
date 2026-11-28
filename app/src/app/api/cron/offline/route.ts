@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { OFFLINE_AFTER_MS, offlineAlert } from "@/lib/alerts";
 import { purgeOldData } from "@/lib/cleanup";
 import { refreshPodcasts } from "@/lib/podcast";
+import { alertSilentReminders } from "@/lib/silentReminders";
 import { notifyDevice } from "@/lib/push";
 import { admin } from "@/lib/supabase/admin";
 
@@ -26,8 +27,9 @@ export async function GET(req: Request) {
     await notifyDevice(d.id, offlineAlert(d.name ?? "LUMI"));
     await db.from("devices").update({ offline_alerted: true }).eq("id", d.id);
   }
+  const reminders = await alertSilentReminders();  // przypomnienia, o których LUMI nie dało znać
   await purgeOldData(); // RODO: stare zdarzenia, wiadomości i historia nie leżą w bazie w nieskończoność
   // nowe odcinki podcastów co 6 godzin (harmonogram woła co godzinę)
   const podcasts = new Date().getUTCHours() % 6 === 0 ? await refreshPodcasts() : 0;
-  return NextResponse.json({ alerted: (data ?? []).length, podcasts });
+  return NextResponse.json({ alerted: (data ?? []).length, reminders, podcasts });
 }

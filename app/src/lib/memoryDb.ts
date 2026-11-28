@@ -32,6 +32,10 @@ export function memoryDb() {
         filters.push((r) => r[k] != null && (r[k] as number | string) < v);
         return q;
       },
+      gte(k: string, v: number | string) {
+        filters.push((r) => r[k] != null && (r[k] as number | string) >= v);
+        return q;
+      },
       order(k: string, opts?: { ascending?: boolean }) {
         sortBy = { k, asc: opts?.ascending !== false };
         return q;

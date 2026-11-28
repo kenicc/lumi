@@ -35,3 +35,11 @@ export function offlineAlert(name: string): Alert {
 export function backOnlineAlert(name: string): Alert {
   return { title: `${name}: znów w sieci`, body: "LUMI połączyło się ponownie." };
 }
+
+export function silentReminderAlert(name: string, items: { text: string; time: string }[]): Alert {
+  const list = items.map((r) => `„${r.text}” (${r.time})`).join(", ");
+  return {
+    title: `${name}: nie wiadomo, czy było przypomnienie`,
+    body: `${list} - LUMI nie łączy się od wcześniej, więc mogło nie przypomnieć. Warto zadzwonić.`,
+  };
+}

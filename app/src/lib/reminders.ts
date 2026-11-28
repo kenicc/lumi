@@ -3,7 +3,8 @@ import type { Reminder } from "./schema";
 
 export interface ReminderEvent {
   reminder_id: string;
-  status: "done" | "snoozed" | "missed" | "shown";
+  // nodata: wpis serwera - LUMI nie dało znać o przypomnieniu, rodzina dostała powiadomienie
+  status: "done" | "snoozed" | "missed" | "shown" | "nodata";
   at: string; // ISO
 }
 
@@ -38,17 +39,39 @@ export function todayPlan(reminders: Reminder[], events: ReminderEvent[], now = 
   return reminders
     .filter((r) => r.days.length === 0 || r.days.includes(w.weekday))
     .map((r) => {
+      // raport z LUMI ma pierwszeństwo przed wpisem "nodata" serwera (urządzenie mogło wrócić później)
       const ev = events
-        .filter((e) => e.reminder_id === r.id && today(e.at))
+        .filter((e) => e.reminder_id === r.id && today(e.at) && e.status !== "nodata")
         .sort((a, b) => a.at.localeCompare(b.at))
         .at(-1);
       const m = toMinute(r.time);
       let state: DayState;
-      if (ev) state = ev.status;
+      if (ev) state = ev.status as DayState;
       else if (m > w.minute) state = "upcoming";
       else if (w.minute - m < 15) state = "waiting"; // LUMI właśnie przypomina
       else state = "unknown"; // brak raportu - np. LUMI było wyłączone albo bez internetu
       return { reminder: r, state, at: ev?.at };
     })
     .sort((a, b) => a.reminder.time.localeCompare(b.reminder.time));
+}
+
+export const SILENT_AFTER_MIN = 45;  // tyle czasu LUMI ma na pokazanie, 2 odłożenia i raport
+const SILENT_WINDOW_MIN = 240;      // starszych nie zgłaszamy (np. po pierwszym wdrożeniu)
+
+/**
+ * Przypomnienia, o których LUMI nic nie powiedziało, choć dawno minęła ich pora - a samo LUMI nie
+ * łączy się od chwili przed tą porą (wyłączone, rozładowane, bez zasięgu). Wtedy urządzenie nie wyśle
+ * "bez potwierdzenia", więc rodzinę musi zawiadomić serwer. Każde zgłaszamy raz (wpis "nodata").
+ */
+export function silentReminders(reminders: Reminder[], events: ReminderEvent[], lastSeen: string | null, now = new Date()) {
+  const w = warsawNow(now);
+  const today = (iso: string) => warsawNow(new Date(iso)).date === w.date;
+  return reminders.filter((r) => {
+    if (r.days.length && !r.days.includes(w.weekday)) return false;
+    const ago = w.minute - toMinute(r.time);
+    if (ago < SILENT_AFTER_MIN || ago > SILENT_WINDOW_MIN) return false;
+    if (events.some((e) => e.reminder_id === r.id && today(e.at))) return false;
+    const due = now.getTime() - ago * 60_000;
+    return !lastSeen || new Date(lastSeen).getTime() < due;
+  });
 }
