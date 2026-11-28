@@ -28,6 +28,8 @@ enum class Ev : uint8_t {
   PhotosUpdated,  // pobrano nowe zdjęcia kontaktów
   MessagesArrived,  // nowe wiadomości od rodziny (net::takeMessages)
   Unpaired,         // serwer potwierdził, że LUMI usunięto z aplikacji: kasujemy ustawienia
+  WifiScan,         // lista widocznych sieci gotowa (net::scanResults)
+  SimBook,          // kontakty z karty SIM przeczytane (a = liczba, -1 = błąd; modem::simContacts)
 };
 
 struct Event {

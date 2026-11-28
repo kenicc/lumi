@@ -357,6 +357,28 @@ static void test_rtc_codec() {
   TEST_ASSERT_FALSE(rtcc::decode(junk, back));
 }
 
+void test_sim_book() {
+  char num[32], name[64];
+  // UCS2 (SIM800): imię z polskimi literami i numer w hex
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 3,\"002B00340038003600300030003100300030003200300030\",145,\"0043006F0072006B0061002000C5\"",
+                                 true, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("+48600100200", num);
+  TEST_ASSERT_EQUAL_STRING("Corka \xC3\x85", name);
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 4,\"601200300\",129,\"004A00F3007A00650066\"", true, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("601200300", num);
+  TEST_ASSERT_EQUAL_STRING("J\xC3\xB3zef", name);
+  // bez UCS2: "ABBA" to imię, a nie znak szesnastkowy
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 1,\"60010020\",129,\"ABBA\"", false, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("60010020", num);
+  TEST_ASSERT_EQUAL_STRING("ABBA", name);
+  // kod operatora i pusty wpis to nie kontakty
+  TEST_ASSERT_FALSE(at::parseCpbr("+CPBR: 2,\"*100#\",129,\"Stan konta\"", false, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_FALSE(at::parseCpbr("+CPBR: 5,\"\",129,\"\"", false, num, sizeof num, name, sizeof name));
+  int last = 0;
+  TEST_ASSERT_TRUE(at::parseCpbrRange("+CPBR: (1-250),40,14", last));
+  TEST_ASSERT_EQUAL(250, last);
+}
+
 void test_local_edit() {
   using namespace local;
   std::string doc, out, err;
@@ -492,6 +514,7 @@ int main() {
   RUN_TEST(test_due_window);
   RUN_TEST(test_weather_fresh);
   RUN_TEST(test_local_edit);
+  RUN_TEST(test_sim_book);
   RUN_TEST(test_contract);
   RUN_TEST(test_rtc_codec);
   return UNITY_END();

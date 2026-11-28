@@ -30,11 +30,17 @@ struct Settings {
   bool weather = true;
   uint16_t syncIntervalSec = 20;
   int version = 0;
+  bool configured = false;          // są ustawienia (z aplikacji albo zrobione na samym LUMI)
   std::vector<std::string> photos;  // skróty zdjęć kontaktów do pobrania
 };
 
 void begin();
 void apply(const Settings& s);
+// Wi-Fi ustawiane na samym LUMI: lista widocznych sieci (gotowa = zdarzenie Ev::WifiScan, od
+// najsilniejszej) i "dodano sieć" - przerywa sieć konfiguracyjną i łączy od razu.
+void requestScan();
+std::vector<std::string> scanResults();
+void networksChanged();
 bool wifiConnected();
 std::string wifiSsid();
 Cloud cloud();

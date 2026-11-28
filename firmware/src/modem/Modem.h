@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <vector>
 // Rozmowy przez modem LTE (VoLTE) sterowany komendami AT po UART.
 // Jedna warstwa dla modemów: SIMCom A7670E (KAmod), Quectel EG915U-EU (seria) i SIM800L
 // (prototyp z Allegro, tylko 2G - bez VoLTE).
@@ -44,6 +46,13 @@ void tone(uint16_t hz, uint16_t onMs, uint16_t offMs, uint16_t totalMs);
 
 // Konsola serwisowa
 void raw(const char* cmd);  // wynik wypisywany na USB
+
+struct SimContact {
+  std::string name, number;
+};
+// Czyta książkę telefoniczną karty SIM w tle; gotowe = zdarzenie Ev::SimBook (a = liczba, -1 = błąd)
+void requestSimBook();
+std::vector<SimContact> simContacts();
 void diag();                // zestaw komend do testu VoLTE (etap 1)
 void bridge(Stream& usb);   // przezroczyste połączenie USB <-> modem, koniec: linia "+++"
 

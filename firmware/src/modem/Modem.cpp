@@ -9,13 +9,15 @@
 #include "../core/AtParse.h"
 #include "../hw/Board.h"
 
+#include <vector>
+
 namespace modem {
 
 namespace {
 
 HardwareSerial& uart = Serial1;
 
-enum class CmdType : uint8_t { Dial, Answer, Hangup, Volume, Raw, Diag, PowerOff, Ringer, Tone };
+enum class CmdType : uint8_t { Dial, Answer, Hangup, Volume, Raw, Diag, PowerOff, Ringer, Tone, SimBook };
 struct Cmd {
   CmdType t;
   char arg[64];
@@ -23,6 +25,8 @@ struct Cmd {
 };
 
 QueueHandle_t cmdQ;
+std::vector<SimContact> simBook;  // chronione przez stMutex
+bool ucs2Active = false;          // trwa czytanie karty SIM w UCS2: numery z URC też są w hex
 SemaphoreHandle_t stMutex;
 Status st;
 volatile bool bridging = false;
@@ -108,6 +112,11 @@ bool handleUrc(const char* l) {
     return true;
   }
   if (at::parseClip(l, num, sizeof num)) {
+    if (ucs2Active) {  // rozmowa w trakcie czytania karty SIM: numer przyszedł jako hex UCS2
+      char dec[24];
+      at::ucs2Decode(num, dec, sizeof dec);
+      strlcpy(num, dec, sizeof num);
+    }
     onRing();
     if (cs == CallState::Incoming && !incomingPosted) {
       incomingPosted = true;
@@ -381,8 +390,45 @@ void runDiag() {
   Serial.println("i w trakcie rozmowy 'at AT+COPS?' - wciaz 7 oznacza rozmowe przez VoLTE, bez spadku do 2G.");
 }
 
+// Książka telefoniczna karty SIM - kontakty seniora często są właśnie tam. Imiona czytamy w UCS2
+// (polskie litery), a potem wracamy do zwykłego zestawu znaków: w UCS2 także numer z +CLIP
+// przychodziłby jako hex.
+void readSimBook() {
+  std::vector<SimContact> out;
+  int last = 0;
+  char r[1200];
+  bool ok = cs == CallState::Idle && cmd("AT+CPBS=\"SM\"", 3000) == Res::Ok;
+  if (ok && cmd("AT+CPBR=?", 3000, r, sizeof r) == Res::Ok) at::parseCpbrRange(r, last);
+  if (last > 250) last = 250;
+  bool ucs2 = last > 0 && cmd("AT+CSCS=\"UCS2\"", 2000) == Res::Ok;
+  ucs2Active = ucs2;
+  for (int i = 1; i <= last && out.size() < 60 && cs == CallState::Idle; i += 10) {
+    char q[32];
+    snprintf(q, sizeof q, "AT+CPBR=%d,%d", i, i + 9 > last ? last : i + 9);
+    if (cmd(q, 5000, r, sizeof r) != Res::Ok) continue;  // puste pozycje dają czasem błąd
+    char* save = nullptr;
+    for (char* l = strtok_r(r, "\n", &save); l; l = strtok_r(nullptr, "\n", &save)) {
+      SimContact k;
+      char num[32], name[64];
+      if (!at::parseCpbr(l, ucs2, num, sizeof num, name, sizeof name)) continue;
+      k.number = num;
+      k.name = name;
+      out.push_back(k);
+    }
+  }
+  if (ucs2) cmd("AT+CSCS=\"IRA\"", 2000);
+  ucs2Active = false;
+  xSemaphoreTake(stMutex, portMAX_DELAY);
+  simBook = out;
+  xSemaphoreGive(stMutex);
+  bus::post(Event(Ev::SimBook, ok ? (int32_t)out.size() : -1));
+}
+
 void handle(const Cmd& c) {
   switch (c.t) {
+    case CmdType::SimBook:
+      readSimBook();
+      break;
     case CmdType::Dial:
       if (cs != CallState::Idle || !validNumber(c.arg)) break;
       {
@@ -563,6 +609,13 @@ void tone(uint16_t hz, uint16_t onMs, uint16_t offMs, uint16_t totalMs) {
 }
 void raw(const char* c) { send(CmdType::Raw, c); }
 void diag() { send(CmdType::Diag); }
+void requestSimBook() { send(CmdType::SimBook); }
+std::vector<SimContact> simContacts() {
+  xSemaphoreTake(stMutex, portMAX_DELAY);
+  std::vector<SimContact> v = simBook;
+  xSemaphoreGive(stMutex);
+  return v;
+}
 
 void bridge(Stream& usb) {
   bridging = true;

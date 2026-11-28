@@ -7,6 +7,7 @@
 #include <string>
 
 #include "State.h"
+#include "Setup.h"
 #include "../audio/AudioOut.h"
 #include "../core/AtParse.h"
 #include "../core/Calendar.h"
@@ -590,9 +591,10 @@ void renderUnpaired() {
     lv_obj_align(col, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     if (wifiStep) {
+      // krócej niż kiedyś: pod spodem jest pasek "Ustaw bez telefonu"
       ui::label(col, f, P.accent, "Krok 1 z 2");
-      ui::label(col, f, P.text, "Zeskanuj aparatem telefonu, żeby połączyć się z LUMI.", true);
-      ui::label(col, &lumi_r20, P.dim, "Potem otwórz stronę", true);
+      ui::label(col, f, P.text, "Zeskanuj telefonem i wybierz swoją sieć.", true);
+      ui::label(col, &lumi_r20, P.dim, "potem otwórz");
       ui::label(col, f, P.text, "192.168.4.1");
     } else {
       char code[24];
@@ -630,37 +632,6 @@ void renderUnpaired() {
 }
 
 // Ekran serwisowy (Home 5 s): dla rodziny przy przeprowadzce lub ponownym dodaniu do aplikacji
-void renderService() {
-  auto& P = ui::pal();
-  auto& F = ui::fonts();
-  net::Cloud c = net::cloud();
-  lv_obj_t* col = ui::column(ui::content(), 4);
-  if (c == net::Cloud::Provisioning) {
-    ui::label(col, &lumi_b20, P.accent, "Wi-Fi z telefonu");
-    qrBox(col, pairing::wifiQr(identity::id(), identity::apPassword()), 120);
-    ui::label(col, &lumi_r20, P.text, "potem 192.168.4.1");
-  } else if (c == net::Cloud::Unclaimed) {
-    ui::label(col, &lumi_b20, P.accent, "Dodaj do aplikacji");
-    qrBox(col, pairing::pairUrl(identity::server(), identity::id(), identity::pairCode()), 120);
-    char code[24];
-    snprintf(code, sizeof code, "Kod: %s", identity::pairCode());
-    ui::label(col, &lumi_r20, P.text, code);
-  } else {
-    ui::label(col, &lumi_b20, P.accent, "Informacje");
-    ui::label(col, F.small, P.text, identity::id());
-    std::string w = net::wifiConnected() ? "Wi-Fi: " + net::wifiSsid() : "Wi-Fi: brak";
-    ui::label(col, F.small, P.text, w.c_str(), true);
-    ui::label(col, F.small, P.text, net::cloudName(c), true);
-    modem::Status m = modem::status();
-    char b[64];
-    snprintf(b, sizeof b, "%s, zasięg %d/4", modem::vendorName(m.vendor), m.bars);
-    ui::label(col, F.small, P.dim, b, true);
-  }
-  ui::setRail(0, IC_WIFI, "Wi-Fi", ui::Tone::Neutral);
-  ui::hideRail(1);
-  ui::setRail(2, IC_BACK, "Wróć", ui::Tone::Neutral);
-}
-
 void renderReminder() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
@@ -786,6 +757,10 @@ int bottomSlot(Key k) {
 }
 
 void showHints() {
+  if (scr == Screen::Unpaired && call.phase == Phase::None) {
+    ui::hints(nullptr, ui::Tone::Neutral, "Ustaw bez telefonu");
+    return;
+  }
   int h = bottomSlot(Key::Home), c = bottomSlot(Key::Call);
   const char* ht = h >= 0 ? ui::railText(h) : nullptr;
   const char* ct = c >= 0 ? ui::railText(c) : nullptr;
@@ -797,7 +772,8 @@ void render() {
   // Etykiety przycisków na każdym ekranie oprócz zegara (tam ma być czysto: godzina, data, pogoda).
   // Tryb jednego przycisku zawsze z etykietami - wyróżnienie musi być widać.
   bool cleanHome = call.phase == Phase::None && !missed.has &&
-                   (scr == Screen::Home || scr == Screen::Weather || (scr == Screen::Message && inbox.empty()));
+                   (scr == Screen::Home || scr == Screen::Weather || scr == Screen::Unpaired ||
+                    (scr == Screen::Message && inbox.empty()));
   ui::setRailLabels(C.oneButton || !cleanHome);
   ui::clearContent();
   // tło testowe tylko pod zegarem i nie w wysokim kontraście (tam liczy się wyłącznie czytelność)
@@ -815,7 +791,7 @@ void render() {
       case Screen::Weather: renderWeather(); break;
       case Screen::Confirm: renderConfirm(); break;
       case Screen::Unpaired: renderUnpaired(); break;
-      case Screen::Service: renderService(); break;
+      case Screen::Service: localsetup::render(); break;
       case Screen::Reminder: renderReminder(); break;
       case Screen::Message:
         if (inbox.empty()) renderHome();

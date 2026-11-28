@@ -40,6 +40,11 @@ namespace {
 SemaphoreHandle_t mtx;
 Settings cfgNet;
 bool cfgDirty = true;
+std::atomic<bool> scanReq{false};
+std::atomic<bool> endProvision{false};
+bool scanning = false;
+uint32_t scanStarted = 0;
+std::vector<std::string> scanList;  // chroniona przez mtx
 wx::Forecast fc;
 volatile bool weatherReq = true;
 volatile bool reportReq = true;
@@ -698,10 +703,42 @@ void fetchWeather(const Settings& s) {
 
 // ---------- zadanie ----------
 
+// Skanowanie na życzenie menu na LUMI: w tle, żeby nie blokować pętli; wynik zdarzeniem
+void serviceScan() {
+  if (scanReq.exchange(false)) {
+    if (WiFi.getMode() == WIFI_OFF) {
+      WiFi.mode(WIFI_STA);
+      wifiOff = false;
+    }
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true);
+    scanning = true;
+    scanStarted = millis();
+  }
+  if (!scanning) return;
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING && millis() - scanStarted < 15000) return;
+  std::vector<std::string> v;
+  for (int i = 0; i < n && v.size() < 20; i++) {  // wyniki są już od najsilniejszej
+    std::string ss = WiFi.SSID(i).c_str();
+    bool dup = ss.empty();
+    for (const auto& x : v) dup |= x == ss;
+    if (!dup) v.push_back(ss);
+  }
+  WiFi.scanDelete();
+  scanning = false;
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  scanList = v;
+  xSemaphoreGive(mtx);
+  bus::post(Event(Ev::WifiScan, (int32_t)v.size()));
+}
+
 void task(void*) {
   WiFi.mode(WIFI_OFF);
   connectingSince = millis();
   for (;;) {
+    serviceScan();
+    if (endProvision.exchange(false) && web) provisionUntil = millis();
     if (web) {  // tryb konfiguracji Wi-Fi
       dns->processNextRequest();
       web->handleClient();
@@ -727,7 +764,15 @@ void task(void*) {
     }
 
     std::vector<cfg::Wifi> nets = allNetworks(s);
-    bool unconfigured = s.version == 0;
+    bool unconfigured = s.version == 0 && !s.configured;
+    if (scanning) continue;  // WiFiMulti skanuje po swojemu - nie wchodźmy sobie w drogę
+    // ustawione na samym LUMI i bez Wi-Fi (np. tylko rozmowy przez sieć komórkową): bez sieci
+    // konfiguracyjnej w kółko - Wi-Fi da się dodać z menu
+    if (!provisionReq && nets.empty() && !unconfigured) {
+      setCloud(Cloud::NoWifi);
+      if (!wifiOff) radioOff();
+      continue;
+    }
     if (provisionReq || nets.empty()) {
       provisionReq = false;
       if (nets.empty()) setCloud(Cloud::NoWifi);
@@ -869,6 +914,19 @@ wx::Forecast forecast() {
 void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
+void requestScan() { scanReq = true; }
+std::vector<std::string> scanResults() {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  std::vector<std::string> v = scanList;
+  xSemaphoreGive(mtx);
+  return v;
+}
+void networksChanged() {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  cfgDirty = true;
+  xSemaphoreGive(mtx);
+  endProvision = true;  // sieć dodana na LUMI: koniec sieci konfiguracyjnej, łączymy od razu
+}
 void checkUpdateNow() { otaForce = true; }
 void setPanelAp(bool on) { panelApOn = on; }
 bool panelAp() { return panelApOn; }

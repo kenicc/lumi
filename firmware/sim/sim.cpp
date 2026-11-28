@@ -102,6 +102,9 @@ Status status() {
   return s;
 }
 const char* vendorName(Vendor) { return "sim"; }
+std::vector<SimContact> simBookData = {{"Mama Krysia", "+48 605 111 222"}, {"Józef", "601200300"}};
+void requestSimBook() { bus::post(Event(Ev::SimBook, (int32_t)simBookData.size())); }
+std::vector<SimContact> simContacts() { return simBookData; }
 }  // namespace modem
 
 static wx::Forecast fc;
@@ -125,7 +128,18 @@ std::string photoPath(const std::string& h) { return "/ph/" + h + ".565"; }
 std::vector<Message> takeMessages() { return {}; }
 wx::Forecast forecast() { return fc; }
 void refreshWeather() {}
-bool saveConfigFile(const char*, size_t) { return true; }
+bool saveConfigFile(const char* j, size_t n) {  // naprawdę zapisuje: menu na LUMI czyta plik z powrotem
+  FILE* f = fopen((LittleFS.root + "/config.json").c_str(), "wb");
+  if (!f) return false;
+  fwrite(j, 1, n, f);
+  fclose(f);
+  return true;
+}
+std::vector<std::string> simScan = {"Dom", "Sasiad_5G", "Orange_Swiatlowod"};
+void requestScan() { bus::post(Event(Ev::WifiScan, (int32_t)simScan.size())); }
+std::vector<std::string> scanResults() { return simScan; }
+static int networksChangedCalls = 0;
+void networksChanged() { networksChangedCalls++; }
 }  // namespace net
 
 namespace identity {
@@ -136,8 +150,9 @@ const char* pairCode() { return "K7MPQ2XR"; }
 const char* apPassword() { return "40719263"; }
 std::string server() { return "https://lumi-rodzina.vercel.app"; }
 void setServer(const std::string&) {}
-std::vector<cfg::Wifi> wifi() { return {}; }
-void addWifi(const std::string&, const std::string&) {}
+static std::vector<cfg::Wifi> savedWifi;
+std::vector<cfg::Wifi> wifi() { return savedWifi; }
+void addWifi(const std::string& s, const std::string& p) { savedWifi.push_back({s, p}); }
 void factoryReset() {}
 }  // namespace identity
 
@@ -260,6 +275,19 @@ static std::string readFile(const char* p) {
 static void replace(std::string& s, const std::string& a, const std::string& b) {
   size_t p = s.find(a);
   if (p != std::string::npos) s.replace(p, a.size(), b);
+}
+
+// n kroków rolką (każde zdarzenie = jedna pozycja)
+static void wheel(int n) {
+  for (int i = 0; i < (n < 0 ? -n : n); i++) bus::post(Event(Ev::Wheel, n < 0 ? -1 : 1));
+  run(100);
+}
+
+// na stronie Kontakty: otwórz pozycję i (0 = Dodaj osobę, 1 = Z karty SIM, 2.. = osoby)
+static void open_contacts_item(int i) {
+  wheel(-40);  // lista zatrzymuje się na początku
+  wheel(i);
+  key(Key::Mid);
 }
 
 int main() {
@@ -419,13 +447,20 @@ int main() {
   shot("19_allegro_dzwonek");
   run(2500);
 
-  // ekran serwisowy (Home 5 s)
+  // menu ustawień (przytrzymany Dom) i kod QR do aplikacji rodziny
   key(Key::Home, Ev::KeyLong);
-  shot("20_serwis");
+  shot("20_ustawienia");
+  check(D::scr == Screen::Service, "przytrzymany Dom otwiera ustawienia");
+  wheel(4);  // Aplikacja rodziny
+  key(Key::Mid);
   cloudSim = net::Cloud::Unclaimed;
   bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
-  shot("21_serwis_parowanie");
-  key(Key::Bottom);
+  shot("21_ustawienia_aplikacja");
+  cloudSim = net::Cloud::Ok;
+  bus::post(Event(Ev::CloudState, (int32_t)cloudSim));
+  key(Key::Home);  // wstecz do menu
+  key(Key::Home);  // z menu do zegara
+  check(D::scr == Screen::Home, "Dom w menu wraca do zegara");
 
   // przypomnienie od rodziny
   app::testReminder("Weź leki na ciśnienie");
@@ -488,6 +523,72 @@ int main() {
   shot("31_test_bledy");
   key(Key::Home);
   check(!selftest::active(), "test sprzętu zakończony");
+
+  // ---- ustawienia na samym LUMI, bez telefonu ----
+  key(Key::Home, Ev::KeyLong);
+  wheel(1);  // Kontakty
+  key(Key::Mid);
+  key(Key::Mid);  // + Dodaj osobę
+  {  // numer rolką: każda cyfra = obrót do niej i środkowy przycisk
+    int cur = 0;
+    for (char ch : std::string("605333444")) {
+      int t = ch - '0';
+      wheel(t - cur);
+      cur = t;
+      key(Key::Mid);
+    }
+  }
+  shot("32_ustawienia_numer");
+  key(Key::Call);  // gotowe -> kto to?
+  shot("33_ustawienia_kto");
+  key(Key::Bottom);  // Córka
+  key(Key::Mid);
+  check(D::C.contacts.size() == 5 && D::C.contacts.back().name == "Córka" && D::C.contacts.back().number == "605333444",
+        "dodanie osoby na LUMI: numer rolką i imię z listy");
+  check(D::C.version > 0 && lastEventHas("\"op\":\"addContact\"") && lastEventHas("\"name\":\"Córka\""), "LUMI w aplikacji: zmiana idzie też do rodziny");
+  // kontakty z karty SIM: Józef ma numer Basi, więc dochodzi tylko jedna osoba
+  open_contacts_item(1);
+  shot("34_ustawienia_sim");
+  key(Key::Mid);  // Dodaj nowe
+  check(D::C.contacts.size() == 6 && D::C.contacts.back().name == "Mama Krysia", "import z karty SIM bez duplikatów");
+  // usunięcie Ani (z potwierdzeniem): znika też jej skrót z ekranu głównego
+  open_contacts_item(2);
+  shot("35_ustawienia_usun");
+  key(Key::Mid);  // "Nie usuwaj" jest pierwsze
+  check(D::C.contacts.size() == 6, "usunięcie wymaga potwierdzenia");
+  open_contacts_item(2);
+  key(Key::Bottom);
+  key(Key::Mid);
+  bool aniaGone = true;
+  for (const auto& k : D::C.contacts) aniaGone &= k.name != "Ania";
+  check(aniaGone && D::C.contacts.size() == 5 && D::C.home[0].kind == cfg::SlotKind::None, "usunięcie osoby i jej skrótu");
+  key(Key::Home);  // do menu
+  // Wi-Fi: sieć z listy i hasło rolką
+  key(Key::Top);
+  key(Key::Mid);
+  shot("36_ustawienia_wifi");
+  key(Key::Mid);  // Dom
+  key(Key::Mid);  // "a"
+  wheel(1);
+  key(Key::Mid);  // "b"
+  wheel(26);
+  key(Key::Mid);  // "1"
+  shot("37_ustawienia_haslo");
+  key(Key::Call);
+  check(identity::wifi().size() == 1 && identity::wifi()[0].ssid == "Dom" && identity::wifi()[0].pass == "ab1" &&
+            net::networksChangedCalls == 1,
+        "Wi-Fi ustawione na LUMI: sieć z listy, hasło rolką");
+  // wielkość tekstu: Duży, potem z powrotem Normalny
+  wheel(2);
+  key(Key::Mid);
+  key(Key::Bottom);
+  key(Key::Mid);
+  check(D::C.textSize == 1, "wielkość tekstu z menu");
+  key(Key::Top);
+  key(Key::Mid);
+  key(Key::Home);
+  key(Key::Home);
+  check(D::scr == Screen::Home && D::C.textSize == 0, "powrót z menu do zegara");
 
   // LUMI usunięte z aplikacji: w trakcie rozmowy nic się nie dzieje, po niej - powrót do parowania
   bus::post(Event(Ev::CallIncoming, 0, 0, "+48601200300"));

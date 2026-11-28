@@ -17,6 +17,7 @@
 
 #include "Diag.h"
 #include "SelfTest.h"
+#include "Setup.h"
 #include "State.h"
 #include "../audio/AudioOut.h"
 #include "../core/AtParse.h"
@@ -406,15 +407,13 @@ void rightAction(int slot) {
         ui::toast("Przypomnę za 10 minut");
       }
       break;
-    case Screen::Service:
-      if (slot == 0) {
-        net::startProvisioning();
-        ui::toast("Sieć LUMI włączona na 5 minut");
-      } else if (slot == 2) {
-        go(haveConfig ? Screen::Home : Screen::Unpaired);
-      }
-      break;
+    case Screen::Service: break;  // własne sterowanie (localsetup::onKey)
   }
+}
+
+void openSetup() {
+  localsetup::open();
+  go(Screen::Service);
 }
 
 void shutdown() {
@@ -498,6 +497,20 @@ void onKey(Key k, Ev type) {
     return;
   }
 
+  // menu ustawień na samym LUMI ma własne sterowanie (rolka i przyciski przesuwają, Dom = wstecz)
+  if (scr == Screen::Service && call.phase == Phase::None && k != Key::Power) {
+    if (type == Ev::KeyShort || type == Ev::KeyLong) audio::sound(audio::Sound::Key);
+    if (localsetup::onKey(k, type)) go(haveConfig ? Screen::Home : Screen::Unpaired);
+    else render();
+    return;
+  }
+  // pierwsze uruchomienie: zielony Dzwoń = ustawienie bez telefonu
+  if (scr == Screen::Unpaired && call.phase == Phase::None && k == Key::Call && type == Ev::KeyShort) {
+    audio::sound(audio::Sound::Key);
+    openSetup();
+    return;
+  }
+
   bool right = k == Key::Top || k == Key::Mid || k == Key::Bottom;
   // Zegar bez etykiet: środkowy boczny = dzwonienie (kontakty, jak dotąd), dolny = pogoda, górny nic
   if (right && !ui::railLabels() && scr == Screen::Home && !missed.has && call.phase == Phase::None) {
@@ -546,7 +559,7 @@ void onKey(Key k, Ev type) {
   }
   if (k == Key::Home && type == Ev::KeyLong && call.phase == Phase::None) {
     audio::sound(audio::Sound::Confirm);
-    go(Screen::Service);
+    openSetup();
     return;
   }
   if (type != Ev::KeyShort) return;
@@ -608,6 +621,11 @@ void onWheel(int d) {
   }
   if (call.phase == Phase::Incoming) {
     if (d < 0) silence();  // skręcenie w dół wycisza dzwonek
+    return;
+  }
+  if (scr == Screen::Service) {  // menu ustawień: rolka przesuwa
+    localsetup::onWheel(d);
+    render();
     return;
   }
   if (!audio::hasMedia()) {  // prototyp bez radia: rolka ustawia dzwonek
@@ -703,6 +721,7 @@ void applyConfig() {
   s.weather = C.weather;
   s.syncIntervalSec = C.syncIntervalSec;
   s.version = C.version;
+  s.configured = haveConfig;
   for (const auto& k : C.contacts)
     if (!k.photo.empty()) s.photos.push_back(k.photo);
   freeUnusedPhotos();
@@ -917,6 +936,11 @@ void handle(const Event& e) {
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
     case Ev::Unpaired: forgetConfig(); break;
+    case Ev::WifiScan:
+    case Ev::SimBook:
+      localsetup::onEvent(e.type);
+      if (scr == Screen::Service && call.phase == Phase::None) render();
+      break;
     case Ev::MessagesArrived:
       for (auto& m : net::takeMessages()) {
         bool dup = false;
