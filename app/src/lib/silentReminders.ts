@@ -19,9 +19,15 @@ export async function alertSilentReminders(now = new Date()): Promise<number> {
     const silent = silentReminders(reminders, (ev ?? []) as ReminderEvent[], d.last_seen, now);
     if (!silent.length) continue;
     // najpierw wpis (każde przypomnienie zgłaszamy raz, nawet gdy wysyłka się nie uda)
-    await db.from("reminder_events").insert(
+    const { error } = await db.from("reminder_events").insert(
       silent.map((r) => ({ device_id: d.id, reminder_id: r.id, text: r.text, minute: toMinute(r.time), status: "nodata", at: now.toISOString() })),
     );
+    // bez wpisu każde uruchomienie harmonogramu wysłałoby to samo jeszcze raz (np. baza bez statusu
+    // 'nodata' - trzeba ponownie uruchomić supabase/schema.sql); lepiej nie wysłać niż zasypać rodzinę
+    if (error) {
+      console.error(`[przypomnienia] nie zapisano wpisu nodata dla ${d.id}: ${error.message}`);
+      continue;
+    }
     await notifyDevice(d.id, silentReminderAlert(d.name ?? "LUMI", silent.map((r) => ({ text: r.text, time: r.time }))));
     alerted += silent.length;
   }

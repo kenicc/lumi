@@ -54,4 +54,24 @@ describe("przypomnienia bez wieści od LUMI", () => {
     expect(await alertSilentReminders(new Date(NOW.getTime() + 30 * 60_000))).toBe(0);
     expect(sent).toHaveLength(1);
   });
+
+  it("gdy wpisu nie da się zapisać (stara baza), nie wysyła - inaczej powtarzałby co godzinę", async () => {
+    const { alertSilentReminders } = await import("@/lib/silentReminders");
+    const s = sample();
+    s.reminders = [r("x", "08:00")];
+    db.tables.devices.splice(0, db.tables.devices.length, { id: "L2", name: "Tata", settings: s, config_version: 1, last_seen: beforeDue });
+    const client = db.client as unknown as { from: (t: string) => Record<string, unknown> };
+    const orig = client.from.bind(client);
+    client.from = (t: string) => {
+      const q = orig(t);
+      return t === "reminder_events" ? { ...q, insert: async () => ({ error: { message: "violates check constraint" } }) } : q;
+    };
+    const before = sent.length;
+    try {
+      expect(await alertSilentReminders(NOW)).toBe(0);
+    } finally {
+      client.from = orig;
+    }
+    expect(sent.length).toBe(before);
+  });
 });
