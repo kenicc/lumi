@@ -69,7 +69,9 @@ export function memoryDb() {
         return q;
       },
       ilike(k: string, v: string) {
-        filters.push((r) => String(r[k] ?? "").toLowerCase() === v.toLowerCase());
+        // jak w Postgresie: % = dowolny ciąg, _ = jeden znak, bez wielkości liter
+        const re = new RegExp("^" + v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".") + "$", "is");
+        filters.push((r) => re.test(String(r[k] ?? "")));
         return q;
       },
       delete() {
