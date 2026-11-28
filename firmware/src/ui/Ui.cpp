@@ -426,6 +426,15 @@ const lv_font_t* titleFont(const char* text) {
   return fits(text, F.title, w) ? F.title : F.body;
 }
 
+// Największy krój, w którym tekst mieści się w JEDNEJ linii (imiona, numery, "Rozmowa 12:34").
+// Gdy nawet najmniejszy się nie mieści, zwraca nullptr - wtedy trzeba łamać (fitFont).
+const lv_font_t* lineFont(const char* text, int w) {
+  static const lv_font_t* const order[] = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_b24};
+  for (const lv_font_t* f : order)
+    if (fits(text, f, w)) return f;
+  return nullptr;
+}
+
 // Największy krój, w którym tekst (łamany na linie) mieści się w prostokącie w x h.
 // Najmniejszy dopuszczalny to krój drugorzędny (min. 20 px) - mniejszego senior nie przeczyta.
 const lv_font_t* fitFont(const char* text, int w, int h) {
@@ -452,7 +461,8 @@ void notice(const char* icon, const char* text) {
   lv_obj_set_style_pad_all(box, 12, 0);
   lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
   label(box, F.iconBig, P.accent, icon);
-  label(box, F.body, P.text, text, true);
+  // jedna informacja na ekranie - tak duża, jak się zmieści
+  label(box, fitFont(text, CONTENT_W - 24, 240 - 24 - 52 - 10), P.text, text, true);
 
   // własna etykieta "OK" przy górnym przycisku - każdy przycisk i tak zamyka
   lv_obj_t* ok = lv_obj_create(noticeObj);
