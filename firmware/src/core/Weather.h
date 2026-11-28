@@ -18,7 +18,13 @@ struct Forecast {
   int codeNow = 0;
   Day today, tomorrow;
   uint32_t fetchedAt = 0;  // millis()
+  int dayKey = -1;         // dzień pobrania: rok * 1000 + dzień roku (czas lokalny); -1 = nieznany
 };
+
+constexpr uint32_t STALE_AFTER_MS = 3UL * 60 * 60 * 1000;
+// Prognoza taka, jaką wolno pokazać teraz: temperatura sprzed ponad 3 godzin nie jest "teraz"
+// (valid = false), a po północy wczorajsze "jutro" staje się "dziś". Starsza niż dzień - nic.
+Forecast fresh(Forecast f, uint32_t nowMs, int todayKey);
 
 Icon iconFor(int wmo);
 const char* textFor(int wmo);  // "pochmurno"

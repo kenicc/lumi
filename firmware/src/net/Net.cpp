@@ -641,16 +641,27 @@ void maybeUpdate(const Settings& s) {
 
 // ---------- pogoda ----------
 
+int todayKey() {
+  time_t t = time(nullptr);
+  if (t < 1700000000) return -1;  // zegar jeszcze nieustawiony
+  tm l;
+  localtime_r(&t, &l);
+  return (l.tm_year + 1900) * 1000 + l.tm_yday;
+}
+
 void fetchWeather(const Settings& s) {
   char url[256];
   snprintf(url, sizeof url,
-           "http://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
+           "https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
            "&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min"
            "&timezone=Europe%%2FWarsaw&forecast_days=2",
            s.lat, s.lon);
+  // HTTPS: w adresie są współrzędne domu seniora - nie mogą iść otwartym tekstem
+  WiFiClientSecure secure;
+  secure.setCACertBundle(lumi_ca_bundle);
   HTTPClient http;
   http.setTimeout(8000);
-  if (!http.begin(url)) return;
+  if (!http.begin(secure, url)) return;
   int code = http.GET();
   if (code != 200) {
     diag::error("[pogoda] HTTP %d", code);
@@ -674,6 +685,7 @@ void fetchWeather(const Settings& s) {
   }
   f.valid = !doc["current"].isNull();
   f.fetchedAt = millis();
+  f.dayKey = todayKey();
   xSemaphoreTake(mtx, portMAX_DELAY);
   fc = f;
   xSemaphoreGive(mtx);
@@ -847,7 +859,7 @@ wx::Forecast forecast() {
   xSemaphoreTake(mtx, portMAX_DELAY);
   wx::Forecast f = fc;
   xSemaphoreGive(mtx);
-  return f;
+  return wx::fresh(f, millis(), todayKey());
 }
 
 void refreshWeather() { weatherReq = true; }

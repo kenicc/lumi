@@ -356,6 +356,35 @@ static void test_rtc_codec() {
   TEST_ASSERT_FALSE(rtcc::decode(junk, back));
 }
 
+void test_weather_fresh() {
+  wx::Forecast f;
+  f.valid = true;
+  f.tempNow = 6;
+  f.today = {true, 3, 2, 7};
+  f.tomorrow = {true, 61, 1, 8};
+  f.fetchedAt = 1000;
+  f.dayKey = 2026 * 1000 + 328;
+  // świeża, ten sam dzień: bez zmian
+  wx::Forecast g = wx::fresh(f, 1000 + 60000, f.dayKey);
+  TEST_ASSERT_TRUE(g.valid && g.tomorrow.valid);
+  // ponad 3 godziny: temperatura "teraz" już nieaktualna
+  TEST_ASSERT_FALSE(wx::fresh(f, 1000 + wx::STALE_AFTER_MS + 1, f.dayKey).valid);
+  // po północy: wczorajsze jutro to dziś, jutra brak
+  g = wx::fresh(f, 1000 + 60000, f.dayKey + 1);
+  TEST_ASSERT_TRUE(g.valid);
+  TEST_ASSERT_EQUAL(61, g.today.code);
+  TEST_ASSERT_FALSE(g.tomorrow.valid);
+  // przez Nowy Rok
+  f.dayKey = 2026 * 1000 + 364;
+  TEST_ASSERT_EQUAL(61, wx::fresh(f, 2000, 2027 * 1000 + 0).today.code);
+  // dwa dni później: nic
+  TEST_ASSERT_FALSE(wx::fresh(f, 2000, 2027 * 1000 + 1).valid);
+  // millis() przekręcone po 49 dniach: różnica bez znaku dalej poprawna
+  f.dayKey = -1;
+  f.fetchedAt = 0xFFFFFF00u;
+  TEST_ASSERT_TRUE(wx::fresh(f, 0x100u, -1).valid);
+}
+
 void test_due_window() {
   long from = 0, to = 0;
   // pierwsze sprawdzenie: tylko bieżąca minuta
@@ -400,6 +429,7 @@ int main() {
   RUN_TEST(test_reminders);
   RUN_TEST(test_reminder_queue);
   RUN_TEST(test_due_window);
+  RUN_TEST(test_weather_fresh);
   RUN_TEST(test_contract);
   RUN_TEST(test_rtc_codec);
   return UNITY_END();
