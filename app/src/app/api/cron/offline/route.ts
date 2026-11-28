@@ -7,6 +7,9 @@ import { refreshPodcasts } from "@/lib/podcast";
 import { notifyDevice } from "@/lib/push";
 import { admin } from "@/lib/supabase/admin";
 
+// podcasty: do 10 s na kanał, 6 naraz - zapas na wiele kanałów
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`)
