@@ -17,6 +17,7 @@
 
 #include "Diag.h"
 #include "SelfTest.h"
+#include "Setup.h"
 #include "State.h"
 #include "../audio/AudioOut.h"
 #include "../core/AtParse.h"
@@ -261,9 +262,31 @@ void startReadyReminder() {
   audio::sound(audio::Sound::Notice);
 }
 
-void checkReminders(const tm& l) {
+long remChecked = -1;  // ostatnia sprawdzona minuta (od 1970)
+// Kopia w pamięci RTC: przeżywa restart (watchdog, spadek napięcia), więc przypomnienie z minuty, w
+// której LUMI się restartowało, też zostanie pokazane. Suma kontrolna odrzuca śmieci po włączeniu zasilania.
+#ifndef RTC_NOINIT_ATTR
+#define RTC_NOINIT_ATTR
+#endif
+RTC_NOINIT_ATTR long remCheckedRtc;
+RTC_NOINIT_ATTR uint32_t remCheckedSum;
+constexpr uint32_t REM_SUM_SALT = 0x5EED1A55u;
+
+// Wywoływane co sekundę; każda minuta jest sprawdzona dokładnie raz, nawet gdy pętla się spóźni
+void checkReminders() {
   if (!haveConfig || !timeValid()) return;
-  reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
+  if (remChecked < 0 && remCheckedSum == ((uint32_t)remCheckedRtc ^ REM_SUM_SALT)) remChecked = remCheckedRtc;
+  long from, to;
+  if (!rem::dueWindow(remChecked, (long)(time(nullptr) / 60), from, to)) return;
+  for (long m = from; m <= to; m++) {
+    time_t t = (time_t)m * 60;
+    tm l;
+    localtime_r(&t, &l);
+    reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
+  }
+  remChecked = to;
+  remCheckedRtc = to;
+  remCheckedSum = (uint32_t)to ^ REM_SUM_SALT;
 }
 
 // Prawa kolumna: znaczenie zależy od ekranu, ale góra = tak, dół = nie/wstecz tam, gdzie to możliwe
@@ -384,15 +407,13 @@ void rightAction(int slot) {
         ui::toast("Przypomnę za 10 minut");
       }
       break;
-    case Screen::Service:
-      if (slot == 0) {
-        net::startProvisioning();
-        ui::toast("Sieć LUMI włączona na 5 minut");
-      } else if (slot == 2) {
-        go(haveConfig ? Screen::Home : Screen::Unpaired);
-      }
-      break;
+    case Screen::Service: break;  // własne sterowanie (localsetup::onKey)
   }
+}
+
+void openSetup() {
+  localsetup::open();
+  go(Screen::Service);
 }
 
 void shutdown() {
@@ -476,6 +497,20 @@ void onKey(Key k, Ev type) {
     return;
   }
 
+  // menu ustawień na samym LUMI ma własne sterowanie (rolka i przyciski przesuwają, Dom = wstecz)
+  if (scr == Screen::Service && call.phase == Phase::None && k != Key::Power) {
+    if (type == Ev::KeyShort || type == Ev::KeyLong) audio::sound(audio::Sound::Key);
+    if (localsetup::onKey(k, type)) go(haveConfig ? Screen::Home : Screen::Unpaired);
+    else render();
+    return;
+  }
+  // pierwsze uruchomienie: zielony Dzwoń = ustawienie bez telefonu
+  if (scr == Screen::Unpaired && call.phase == Phase::None && k == Key::Call && type == Ev::KeyShort) {
+    audio::sound(audio::Sound::Key);
+    openSetup();
+    return;
+  }
+
   bool right = k == Key::Top || k == Key::Mid || k == Key::Bottom;
   // Zegar bez etykiet: środkowy boczny = dzwonienie (kontakty, jak dotąd), dolny = pogoda, górny nic
   if (right && !ui::railLabels() && scr == Screen::Home && !missed.has && call.phase == Phase::None) {
@@ -524,7 +559,7 @@ void onKey(Key k, Ev type) {
   }
   if (k == Key::Home && type == Ev::KeyLong && call.phase == Phase::None) {
     audio::sound(audio::Sound::Confirm);
-    go(Screen::Service);
+    openSetup();
     return;
   }
   if (type != Ev::KeyShort) return;
@@ -588,6 +623,11 @@ void onWheel(int d) {
     if (d < 0) silence();  // skręcenie w dół wycisza dzwonek
     return;
   }
+  if (scr == Screen::Service) {  // menu ustawień: rolka przesuwa
+    localsetup::onWheel(d);
+    render();
+    return;
+  }
   if (!audio::hasMedia()) {  // prototyp bez radia: rolka ustawia dzwonek
     ringOverride = clampv<int>(ringLevel() + d, 1, 10);
     modem::ringer(ringOverride);
@@ -601,13 +641,13 @@ void onWheel(int d) {
 
 void onIncoming(const char* num) {
   if (selftest::active()) selftest::stop();  // rozmowa ważniejsza niż test
+  if (call.phase != Phase::None) return;  // ATH rozłączyłby też trwającą rozmowę
   int k = C.contactIndexByNumber(num);
   if (C.onlyContacts && k < 0) {
     modem::hangup();
     Serial.println("[rozmowa] odrzucono numer spoza listy kontaktów");
     return;
   }
-  if (call.phase != Phase::None) return;
   if (ui::noticeVisible()) {  // rozmowa ma pierwszeństwo, komunikat wróci po niej
     notices.push_front(shownNotice);
     ui::dismissNotice();
@@ -681,6 +721,7 @@ void applyConfig() {
   s.weather = C.weather;
   s.syncIntervalSec = C.syncIntervalSec;
   s.version = C.version;
+  s.configured = haveConfig;
   for (const auto& k : C.contacts)
     if (!k.photo.empty()) s.photos.push_back(k.photo);
   freeUnusedPhotos();
@@ -701,6 +742,47 @@ bool loadFile(const char* path, cfg::Config& out) {
     return false;
   }
   return true;
+}
+
+// LUMI usunięte z aplikacji: kontakty, przypomnienia i zdjęcia poprzedniej rodziny nie mogą
+// zostać na urządzeniu (np. gdy trafi do kogoś innego). Sieć z pierwszego uruchomienia zostaje.
+// Nowa wersja oprogramowania jest zdrowa po 3 minutach pracy. Świeżo zainstalowana musi też połączyć
+// się z serwerem: przed restartem pobrała się przez sieć, więc sieć działała - wersja, która nie umie
+// się połączyć, nie dostałaby już żadnej poprawki. Bez połączenia przez 20 min restart (gdy LUMI nic
+// nie robi); po 3 nieudanych startach ota::begin wraca do poprzedniej wersji.
+constexpr uint32_t HEALTHY_AFTER_MS = 3 * 60 * 1000UL;
+constexpr uint32_t PROOF_TIMEOUT_MS = 20 * 60 * 1000UL;
+
+void checkHealth(uint32_t now) {
+  if (healthyMarked || now < HEALTHY_AFTER_MS) return;
+  if (!ota::awaitingProof() || net::cloud() == net::Cloud::Ok || net::cloud() == net::Cloud::Unclaimed) {
+    healthyMarked = true;
+    ota::markHealthy();
+    return;
+  }
+  if (now > PROOF_TIMEOUT_MS && idleFlag && call.phase == Phase::None) {
+    diag::error("[ota] nowa wersja nie polaczyla sie z serwerem w 20 min - restart");
+    delay(200);
+    ESP.restart();
+  }
+}
+
+void forgetConfig() {
+  if (!haveConfig) return;
+  if (call.phase != Phase::None) return;  // sieć zgłosi to ponownie po rozmowie
+  stopMedia();
+  LittleFS.remove("/config.json");
+  LittleFS.remove("/config.bak");
+  LittleFS.remove("/config.tmp");
+  C = cfg::Config{};
+  haveConfig = false;
+  inbox.clear();
+  reminders = rem::Queue{};
+  clearMissed();
+  ui::dismissNotice();
+  applyConfig();  // wersja 0 dla sieci, zdjęcia bez kontaktów się kasują
+  scr = Screen::Unpaired;
+  render();
 }
 
 bool loadConfig() {
@@ -797,15 +879,13 @@ void tick() {
   // procesor może zwolnić także przy radiu FM (analogowe); radio internetowe wymaga dekodowania
   slowFlag = !screenOn && call.phase == Phase::None && !(as.playing && as.src == audio::Src::Stream);
   callFlag = call.phase != Phase::None;
-  if (!healthyMarked && now > 180000) {  // 3 minuty pracy: nowa wersja oprogramowania jest zdrowa
-    healthyMarked = true;
-    ota::markHealthy();
-  }
+  checkHealth(now);
 
   if (now - lastSecond >= 1000) {
     lastSecond = now;
     updateLive();
     checkBattery();
+    checkReminders();
     tm l = now_tm();
     // ikona połączenia: Wi-Fi albo kreski zasięgu - odśwież zegar, gdy się zmieni
     static int lastConn = -1;
@@ -815,7 +895,6 @@ void tick() {
     lastConn = conn;
     if (l.tm_min != lastMinute) {
       lastMinute = l.tm_min;
-      checkReminders(l);
       if (scr == Screen::Home && call.phase == Phase::None) render();
     } else if (connChanged && scr == Screen::Home && call.phase == Phase::None) {
       render();
@@ -856,6 +935,12 @@ void handle(const Event& e) {
       break;
     case Ev::CallEnded: onEnded(e.a == 1, e.text); break;
     case Ev::ConfigUpdated: reloadConfig(true); break;
+    case Ev::Unpaired: forgetConfig(); break;
+    case Ev::WifiScan:
+    case Ev::SimBook:
+      localsetup::onEvent(e.type);
+      if (scr == Screen::Service && call.phase == Phase::None) render();
+      break;
     case Ev::MessagesArrived:
       for (auto& m : net::takeMessages()) {
         bool dup = false;

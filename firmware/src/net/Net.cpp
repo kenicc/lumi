@@ -31,11 +31,21 @@ extern "C" const uint8_t lumi_ca_bundle[];
 
 namespace net {
 
+#if defined(LUMI_ALLOW_HTTP) && defined(LUMI_VARIANT_SERIES)
+#error "LUMI_ALLOW_HTTP (sekret urządzenia otwartym tekstem) tylko do testów w sieci domowej, nie w wersji series"
+#endif
+
 namespace {
 
 SemaphoreHandle_t mtx;
 Settings cfgNet;
 bool cfgDirty = true;
+std::atomic<bool> scanReq{false};
+std::atomic<bool> endProvision{false};
+std::atomic<bool> helloAgain{false};  // zmiana ustawień na niesparowanym LUMI: wyślij nową migawkę
+bool scanning = false;
+uint32_t scanStarted = 0;
+std::vector<std::string> scanList;  // chroniona przez mtx
 wx::Forecast fc;
 volatile bool weatherReq = true;
 volatile bool reportReq = true;
@@ -337,6 +347,28 @@ Resp request(const char* method, const char* path, const String& body, int versi
   return r;
 }
 
+// Usunięcie z aplikacji: serwer mówi "nikt nie dodał tego LUMI", a my mamy ustawienia z
+// poprzedniego parowania. Kasujemy je dopiero, gdy słyszymy to kilka razy z rzędu przez co
+// najmniej minutę - pojedyncza dziwna odpowiedź nie może wyczyścić seniorowi kontaktów.
+constexpr uint8_t UNPAIR_HITS = 3;
+constexpr uint32_t UNPAIR_AFTER_MS = 60 * 1000UL;
+uint8_t unclaimedHits = 0;
+uint32_t unclaimedSince = 0;
+
+void noteClaimed(bool claimed, const Settings& s) {
+  if (claimed || s.version == 0) {
+    unclaimedHits = 0;
+    return;
+  }
+  if (unclaimedHits == 0) unclaimedSince = millis();
+  if (unclaimedHits < 255) unclaimedHits++;
+  if (unclaimedHits >= UNPAIR_HITS && millis() - unclaimedSince >= UNPAIR_AFTER_MS) {
+    unclaimedHits = 0;
+    diag::error("[serwer] LUMI usunieto z aplikacji - powrot do parowania");
+    bus::post(Event(Ev::Unpaired));
+  }
+}
+
 void hello(const Settings& s) {
   JsonDocument d;
   d["id"] = identity::id();
@@ -345,14 +377,35 @@ void hello(const Settings& s) {
   d["variant"] = LUMI_VARIANT;
   d["fw"] = LUMI_FW_VERSION;
   d["build"] = LUMI_FW_BUILD;
+  // ustawione na samym LUMI przed parowaniem: aplikacja przejmie kontakty, tekst i dzwonek
+  if (s.version == 0 && s.configured) {
+    File f = LittleFS.open("/config.json", "r");
+    JsonDocument c;
+    if (f && !deserializeJson(c, f)) {
+      JsonObject local = d["local"].to<JsonObject>();
+      JsonArray out = local["contacts"].to<JsonArray>();
+      for (JsonObject k : c["contacts"].as<JsonArray>()) {
+        if (out.size() >= 30) break;
+        JsonObject o = out.add<JsonObject>();
+        o["id"] = k["id"];
+        o["name"] = k["name"];
+        o["number"] = k["number"];
+      }
+      if (!c["display"]["textSize"].isNull()) local["textSize"] = c["display"]["textSize"];
+      if (!c["sound"]["ringVolume"].isNull()) local["ringVolume"] = c["sound"]["ringVolume"];
+    }
+    if (f) f.close();
+  }
   String b;
   serializeJson(d, b);
   Resp r = request("POST", "/api/device/hello", b, s.version);
   if (r.code == 200) {
     helloDone = true;
     JsonDocument o;
-    deserializeJson(o, r.body);
-    setCloud((o["claimed"] | false) ? Cloud::Ok : Cloud::Unclaimed);
+    bool parsed = deserializeJson(o, r.body) == DeserializationError::Ok;
+    bool claimed = parsed && (o["claimed"] | false);
+    if (parsed) noteClaimed(claimed, s);  // nieczytelna odpowiedź nic nie mówi o parowaniu
+    setCloud(claimed ? Cloud::Ok : Cloud::Unclaimed);
   } else if (r.code == 401 || r.code == 403) {
     setCloud(Cloud::AuthError);
     diag::error("[serwer] sekret odrzucony");
@@ -366,10 +419,16 @@ void syncConfig(const Settings& s) {
   Resp r = request("GET", "/api/device/config", "", s.version);
   if (r.code > 0) inboxTop = r.inbox;
   if (r.code == 304) {
+    noteClaimed(true, s);
     setCloud(Cloud::Ok);
     return;
   }
-  if (r.code == 404 || r.code == 409) {
+  if (r.code == 409) {
+    noteClaimed(false, s);
+    setCloud(Cloud::Unclaimed);
+    return;
+  }
+  if (r.code == 404) {  // inny serwer albo zła ścieżka - nie traktujemy jako usunięcia
     setCloud(Cloud::Unclaimed);
     return;
   }
@@ -382,6 +441,7 @@ void syncConfig(const Settings& s) {
     setCloud(Cloud::Offline);
     return;
   }
+  noteClaimed(true, s);
   setCloud(Cloud::Ok);
   // sprawdzamy dokument tym samym parserem co przy starcie - zły plik nie trafi na dysk
   cfg::Config test;
@@ -506,6 +566,37 @@ void fetchMessages(const Settings& s) {
   if (any) bus::post(Event(Ev::MessagesArrived));
 }
 
+// Kolejka zdarzeń przeżywa restart: "bez potwierdzenia" po zaniku zasilania nie może przepaść, bo
+// serwer go nie odtworzy (po restarcie LUMI znów jest w sieci). Kilka wpisów dziennie - flash to zniesie.
+constexpr const char* EVENTS_FILE = "/events.txt";
+
+void saveEvents() {  // wywoływać z zajętym mtx
+  if (events.empty()) {
+    LittleFS.remove(EVENTS_FILE);
+    return;
+  }
+  File f = LittleFS.open("/events.tmp", "w");
+  if (!f) return;
+  for (const auto& e : events) {
+    f.write(reinterpret_cast<const uint8_t*>(e.data()), e.size());
+    f.write('\n');
+  }
+  f.close();
+  LittleFS.rename("/events.tmp", EVENTS_FILE);
+}
+
+void loadEvents() {
+  File f = LittleFS.open(EVENTS_FILE, "r");
+  if (!f) return;
+  while (f.available() && events.size() < MAX_EVENTS) {
+    String l = f.readStringUntil('\n');
+    l.trim();
+    if (l.length()) events.push_back(l.c_str());
+  }
+  f.close();
+  if (!events.empty()) Serial.printf("[serwer] %u zdarzen z poprzedniego uruchomienia czeka na wyslanie\n", (unsigned)events.size());
+}
+
 void flushEvents(const Settings& s) {
   for (int i = 0; i < 5; i++) {  // kilka na obieg, żeby nie blokować reszty
     xSemaphoreTake(mtx, portMAX_DELAY);
@@ -519,6 +610,7 @@ void flushEvents(const Settings& s) {
     if (r.code != 200 && r.code != 400) return;  // spróbuj później; 400 = zły wpis, odrzuć
     xSemaphoreTake(mtx, portMAX_DELAY);
     if (!events.empty()) events.pop_front();
+    saveEvents();
     xSemaphoreGive(mtx);
   }
 }
@@ -578,16 +670,27 @@ void maybeUpdate(const Settings& s) {
 
 // ---------- pogoda ----------
 
+int todayKey() {
+  time_t t = time(nullptr);
+  if (t < 1700000000) return -1;  // zegar jeszcze nieustawiony
+  tm l;
+  localtime_r(&t, &l);
+  return (l.tm_year + 1900) * 1000 + l.tm_yday;
+}
+
 void fetchWeather(const Settings& s) {
   char url[256];
   snprintf(url, sizeof url,
-           "http://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
+           "https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f"
            "&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min"
            "&timezone=Europe%%2FWarsaw&forecast_days=2",
            s.lat, s.lon);
+  // HTTPS: w adresie są współrzędne domu seniora - nie mogą iść otwartym tekstem
+  WiFiClientSecure secure;
+  secure.setCACertBundle(lumi_ca_bundle);
   HTTPClient http;
   http.setTimeout(8000);
-  if (!http.begin(url)) return;
+  if (!http.begin(secure, url)) return;
   int code = http.GET();
   if (code != 200) {
     diag::error("[pogoda] HTTP %d", code);
@@ -611,6 +714,7 @@ void fetchWeather(const Settings& s) {
   }
   f.valid = !doc["current"].isNull();
   f.fetchedAt = millis();
+  f.dayKey = todayKey();
   xSemaphoreTake(mtx, portMAX_DELAY);
   fc = f;
   xSemaphoreGive(mtx);
@@ -619,10 +723,43 @@ void fetchWeather(const Settings& s) {
 
 // ---------- zadanie ----------
 
+// Skanowanie na życzenie menu na LUMI: w tle, żeby nie blokować pętli; wynik zdarzeniem
+void serviceScan() {
+  if (scanReq.exchange(false)) {
+    if (WiFi.getMode() == WIFI_OFF) {
+      WiFi.mode(WIFI_STA);
+      wifiOff = false;
+    }
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true);
+    scanning = true;
+    scanStarted = millis();
+  }
+  if (!scanning) return;
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING && millis() - scanStarted < 15000) return;
+  std::vector<std::string> v;
+  for (int i = 0; i < n && v.size() < 20; i++) {  // wyniki są już od najsilniejszej
+    std::string ss = WiFi.SSID(i).c_str();
+    bool dup = ss.empty();
+    for (const auto& x : v) dup |= x == ss;
+    if (!dup) v.push_back(ss);
+  }
+  WiFi.scanDelete();
+  scanning = false;
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  scanList = v;
+  xSemaphoreGive(mtx);
+  bus::post(Event(Ev::WifiScan, (int32_t)v.size()));
+}
+
 void task(void*) {
   WiFi.mode(WIFI_OFF);
   connectingSince = millis();
   for (;;) {
+    serviceScan();
+    if (endProvision.exchange(false) && web) provisionUntil = millis();
+    if (helloAgain.exchange(false)) helloDone = false;
     if (web) {  // tryb konfiguracji Wi-Fi
       dns->processNextRequest();
       web->handleClient();
@@ -648,7 +785,15 @@ void task(void*) {
     }
 
     std::vector<cfg::Wifi> nets = allNetworks(s);
-    bool unconfigured = s.version == 0;
+    bool unconfigured = s.version == 0 && !s.configured;
+    if (scanning) continue;  // WiFiMulti skanuje po swojemu - nie wchodźmy sobie w drogę
+    // ustawione na samym LUMI i bez Wi-Fi (np. tylko rozmowy przez sieć komórkową): bez sieci
+    // konfiguracyjnej w kółko - Wi-Fi da się dodać z menu
+    if (!provisionReq && nets.empty() && !unconfigured) {
+      setCloud(Cloud::NoWifi);
+      if (!wifiOff) radioOff();
+      continue;
+    }
     if (provisionReq || nets.empty()) {
       provisionReq = false;
       if (nets.empty()) setCloud(Cloud::NoWifi);
@@ -745,6 +890,7 @@ void task(void*) {
 
 void begin() {
   mtx = xSemaphoreCreateMutex();
+  loadEvents();
   // 12 KB: uzgadnianie TLS (mbedTLS) potrafi zająć ok. 8 KB stosu; zapas widać w "status"
   xTaskCreatePinnedToCore(task, "net", 12288, nullptr, 2, nullptr, 0);
 }
@@ -757,6 +903,7 @@ void apply(const Settings& s) {
   cfgDirty = true;
   xSemaphoreGive(mtx);
   if (coordsChanged) weatherReq = true;
+  if (s.version == 0 && s.configured) helloAgain = true;
   if (versionChanged) reportReq = true;  // rodzina widzi w aplikacji, że zmiana dotarła
   if (versionChanged) photosDirty = true;
 }
@@ -783,12 +930,25 @@ wx::Forecast forecast() {
   xSemaphoreTake(mtx, portMAX_DELAY);
   wx::Forecast f = fc;
   xSemaphoreGive(mtx);
-  return f;
+  return wx::fresh(f, millis(), todayKey());
 }
 
 void refreshWeather() { weatherReq = true; }
 void reportSoon() { reportReq = true; }
 void startProvisioning() { provisionReq = true; }
+void requestScan() { scanReq = true; }
+std::vector<std::string> scanResults() {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  std::vector<std::string> v = scanList;
+  xSemaphoreGive(mtx);
+  return v;
+}
+void networksChanged() {
+  xSemaphoreTake(mtx, portMAX_DELAY);
+  cfgDirty = true;
+  xSemaphoreGive(mtx);
+  endProvision = true;  // sieć dodana na LUMI: koniec sieci konfiguracyjnej, łączymy od razu
+}
 void checkUpdateNow() { otaForce = true; }
 void setPanelAp(bool on) { panelApOn = on; }
 bool panelAp() { return panelApOn; }
@@ -805,6 +965,7 @@ void queueEvent(const std::string& json) {
   xSemaphoreTake(mtx, portMAX_DELAY);
   if (events.size() >= MAX_EVENTS) events.pop_front();
   events.push_back(json);
+  saveEvents();
   xSemaphoreGive(mtx);
 }
 

@@ -426,6 +426,15 @@ const lv_font_t* titleFont(const char* text) {
   return fits(text, F.title, w) ? F.title : F.body;
 }
 
+// Największy krój, w którym tekst mieści się w JEDNEJ linii (imiona, numery, "Rozmowa 12:34").
+// Gdy nawet najmniejszy się nie mieści, zwraca nullptr - wtedy trzeba łamać (fitFont).
+const lv_font_t* lineFont(const char* text, int w) {
+  static const lv_font_t* const order[] = {&lumi_b48, &lumi_b36, &lumi_b28, &lumi_b24};
+  for (const lv_font_t* f : order)
+    if (fits(text, f, w)) return f;
+  return nullptr;
+}
+
 // Największy krój, w którym tekst (łamany na linie) mieści się w prostokącie w x h.
 // Najmniejszy dopuszczalny to krój drugorzędny (min. 20 px) - mniejszego senior nie przeczyta.
 const lv_font_t* fitFont(const char* text, int w, int h) {
@@ -452,7 +461,8 @@ void notice(const char* icon, const char* text) {
   lv_obj_set_style_pad_all(box, 12, 0);
   lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
   label(box, F.iconBig, P.accent, icon);
-  label(box, F.body, P.text, text, true);
+  // jedna informacja na ekranie - tak duża, jak się zmieści
+  label(box, fitFont(text, CONTENT_W - 24, 240 - 24 - 52 - 10), P.text, text, true);
 
   // własna etykieta "OK" przy górnym przycisku - każdy przycisk i tak zamyka
   lv_obj_t* ok = lv_obj_create(noticeObj);
@@ -506,8 +516,6 @@ void volumeBar(const char* caption, uint8_t level, uint8_t max) {
   if (!volObj) {
     volObj = lv_obj_create(lv_layer_top());
     noScroll(volObj);
-    lv_obj_set_size(volObj, CONTENT_W - 12, 92);
-    lv_obj_align(volObj, LV_ALIGN_BOTTOM_LEFT, 6, -6);
     lv_obj_set_style_radius(volObj, 12, 0);
     lv_obj_set_style_pad_all(volObj, 8, 0);
     lv_obj_t* cap = lv_label_create(volObj);
@@ -517,10 +525,17 @@ void volumeBar(const char* caption, uint8_t level, uint8_t max) {
       noScroll(seg);
       lv_obj_set_style_border_width(seg, 0, 0);
       lv_obj_set_style_radius(seg, 3, 0);
-      int h = 14 + i * 3;  // rosnące słupki: widać kierunek "głośniej"
-      lv_obj_set_size(seg, 14, h);
-      lv_obj_align(seg, LV_ALIGN_BOTTOM_LEFT, i * 18, 0);
     }
+  }
+  // na czystym zegarze (bez etykiet) pasek zakrywa cały dolny rząd, a nie pół kafelka daty
+  int w = (railLabels() ? CONTENT_W : 320) - 12;
+  lv_obj_set_size(volObj, w, 92);
+  lv_obj_align(volObj, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+  int step = (w - 22) / 10;  // 2 x pad 8 + ramka 3
+  for (int i = 0; i < 10; i++) {
+    lv_obj_t* seg = lv_obj_get_child(volObj, i + 1);
+    lv_obj_set_size(seg, step - 4, 14 + i * 3);  // rosnące słupki: widać kierunek "głośniej"
+    lv_obj_align(seg, LV_ALIGN_BOTTOM_LEFT, i * step, 0);
   }
   lv_obj_set_style_bg_color(volObj, P.highContrast ? P.bg : P.surface, 0);
   lv_obj_set_style_border_width(volObj, 3, 0);

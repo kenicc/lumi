@@ -75,6 +75,28 @@ describe("API urządzenia", () => {
     expect(await r.json()).toEqual({ claimed: true });
   });
 
+  it("po usunięciu z aplikacji i ponownym parowaniu wersje idą dalej, a nie od 1", async () => {
+    // LUMI ma na dysku ustawienia w wersji 15, a jego wiersz został usunięty z aplikacji
+    let r: Response = await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }, headers(SECRET, 15)));
+    expect(await r.json()).toEqual({ claimed: false });
+    expect(db.tables.devices[0].applied_version).toBe(15);
+    r = await config(get("/api/device/config", headers(SECRET, 15)));
+    expect(r.status).toBe(409);  // urządzenie po kilku takich odpowiedziach wraca do parowania
+  });
+
+  it("serwer z niższą wersją niż LUMI (np. baza z kopii) podbija numer, zamiast odpowiadać 304", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }));
+    db.tables.members.push({ device_id: ID, user_id: "u1", role: "guardian" });
+    const { sample } = await import("./fixtures");
+    Object.assign(db.tables.devices[0], { settings: sample(), config: { version: 3 }, config_version: 3 });
+    let r = await config(get("/api/device/config", headers(SECRET, 9)));
+    expect(r.status).toBe(200);
+    expect((await r.json()).version).toBe(10);
+    expect(db.tables.devices[0].config_version).toBe(10);
+    r = await config(get("/api/device/config", headers(SECRET, 10)));
+    expect(r.status).toBe(304);
+  });
+
   it("aktualizacje: najnowsza aktywna wersja dla wariantu, nowsza niż zainstalowana", async () => {
     await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR, variant: "allegro", fw: "0.4.0", build: 4 }));
     let r = await firmware(get("/api/device/firmware"));
@@ -126,6 +148,44 @@ describe("API urządzenia", () => {
     expect(db.tables.messages[1].read_at).toBeNull();
     r = await messages(get("/api/device/messages"));
     expect(await r.json()).toHaveLength(0);
+  });
+
+  it("ponowione zdarzenie przypomnienia (zgubiona odpowiedź) nie zapisuje się drugi raz", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }));
+    const at = Math.floor(Date.now() / 1000) - 60;
+    const e = { type: "reminder", id: "r1", text: "Leki", minute: 480, status: "missed", at };
+    expect((await event(post("/api/device/event", e))).status).toBe(200);
+    const r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ duplicate: true });
+    expect(db.tables.reminder_events).toHaveLength(1);
+    // to samo przypomnienie później (np. następnego dnia) to nowe zdarzenie
+    await event(post("/api/device/event", { ...e, at: at + 30 }));
+    expect(db.tables.reminder_events).toHaveLength(2);
+  });
+
+  it("ustawienia z menu LUMI: migawka przed parowaniem, zdarzenie po parowaniu", async () => {
+    const local = { contacts: [{ id: "d1", name: "Córka", number: "605333444" }], textSize: 1 };
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR, local }));
+    expect(db.tables.devices[0].local_settings).toMatchObject(local);
+    // po sparowaniu: senior dodaje osobę na LUMI, rodzina widzi to w aplikacji
+    const { sample } = await import("./fixtures");
+    db.tables.members.push({ device_id: ID, user_id: "u1", role: "guardian" });
+    Object.assign(db.tables.devices[0], { name: "Mama", settings: sample(), config: { version: 5 }, config_version: 5 });
+    const e = { type: "setting", op: "addContact", id: "d9", name: "Wnuczka", number: "605999888" };
+    let r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ ok: true, saved: true });
+    const dev = db.tables.devices[0] as { config_version: number; settings: { contacts: { name: string }[] }; config: { changedBy: string } };
+    expect(dev.config_version).toBe(6);
+    expect(dev.settings.contacts.at(-1)?.name).toBe("Wnuczka");
+    expect(dev.config.changedBy).toBe("");  // LUMI nie pokaże seniorowi jego własnej zmiany
+    expect(db.tables.changes.at(-1)).toMatchObject({ author: "Mama (na urządzeniu)", version: 6 });
+    // ponowione (zgubiona odpowiedź): bez drugiej wersji
+    r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ saved: false });
+    expect(dev.config_version).toBe(6);
+    // zła operacja
+    r = await event(post("/api/device/event", { type: "setting", op: "textSize", value: 9 }));
+    expect(r.status).toBe(400);
   });
 
   it("odrzuca zły format danych", async () => {

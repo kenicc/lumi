@@ -9,6 +9,7 @@
 #include "core/ButtonFilter.h"
 #include "core/Calendar.h"
 #include "core/Config.h"
+#include "core/LocalEdit.h"
 #include "core/Pairing.h"
 #include "core/ReminderQueue.h"
 #include "core/RtcCodec.h"
@@ -138,6 +139,12 @@ void test_numbers() {
   TEST_ASSERT_TRUE(at::sameNumber("+48 600 100 200", "600100200"));
   TEST_ASSERT_TRUE(at::sameNumber("0048600100200", "+48600100200"));
   TEST_ASSERT_FALSE(at::sameNumber("600100201", "600100200"));
+  TEST_ASSERT_TRUE(at::sameNumber("48600100200", "600 100 200"));
+  TEST_ASSERT_TRUE(at::sameNumber("124", "124"));  // numer skrócony / serwisowy
+  // obcy numer z tą samą końcówką to nie ten kontakt
+  TEST_ASSERT_FALSE(at::sameNumber("+491701234567", "701234567"));
+  TEST_ASSERT_FALSE(at::sameNumber("+48701234567", "+49701234567"));
+  TEST_ASSERT_FALSE(at::sameNumber("", "600100200"));
   char out[24];
   at::formatNumber("+48600100200", out, sizeof out);
   TEST_ASSERT_EQUAL_STRING("600 100 200", out);
@@ -350,6 +357,139 @@ static void test_rtc_codec() {
   TEST_ASSERT_FALSE(rtcc::decode(junk, back));
 }
 
+void test_sim_book() {
+  char num[32], name[64];
+  // UCS2 (SIM800): imię z polskimi literami i numer w hex
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 3,\"002B00340038003600300030003100300030003200300030\",145,\"0043006F0072006B0061002000C5\"",
+                                 true, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("+48600100200", num);
+  TEST_ASSERT_EQUAL_STRING("Corka \xC3\x85", name);
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 4,\"601200300\",129,\"004A00F3007A00650066\"", true, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("601200300", num);
+  TEST_ASSERT_EQUAL_STRING("J\xC3\xB3zef", name);
+  // bez UCS2: "ABBA" to imię, a nie znak szesnastkowy
+  TEST_ASSERT_TRUE(at::parseCpbr("+CPBR: 1,\"60010020\",129,\"ABBA\"", false, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_EQUAL_STRING("60010020", num);
+  TEST_ASSERT_EQUAL_STRING("ABBA", name);
+  // kod operatora i pusty wpis to nie kontakty
+  TEST_ASSERT_FALSE(at::parseCpbr("+CPBR: 2,\"*100#\",129,\"Stan konta\"", false, num, sizeof num, name, sizeof name));
+  TEST_ASSERT_FALSE(at::parseCpbr("+CPBR: 5,\"\",129,\"\"", false, num, sizeof num, name, sizeof name));
+  int last = 0;
+  TEST_ASSERT_TRUE(at::parseCpbrRange("+CPBR: (1-250),40,14", last));
+  TEST_ASSERT_EQUAL(250, last);
+}
+
+void test_local_edit() {
+  using namespace local;
+  std::string doc, out, err;
+  // nowe urządzenie bez aplikacji: pierwszy kontakt tworzy dokument, który czyta zwykły parser
+  Op add;
+  add.kind = Kind::AddContact;
+  add.id = "d1";
+  add.name = "Córka Ania";
+  add.number = "+48 600-100-200";
+  TEST_ASSERT_TRUE(apply(doc, add, out, err));
+  cfg::Config c;
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(0, c.version);
+  TEST_ASSERT_EQUAL(1, (int)c.contacts.size());
+  TEST_ASSERT_EQUAL_STRING("+48600100200", c.contacts[0].number.c_str());
+  TEST_ASSERT_EQUAL_STRING("Córka Ania", c.contacts[0].name.c_str());
+  doc = out;
+  // ten sam numer drugi raz, zły numer, za długie imię - odrzucone, dokument bez zmian
+  add.id = "d2";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.number = "12a45";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.number = "601200300";
+  add.name = "Bardzo długie imię ponad limit znaków";
+  TEST_ASSERT_FALSE(apply(doc, add, out, err));
+  add.name = "Józef";
+  TEST_ASSERT_TRUE(apply(doc, add, out, err));
+  doc = out;
+  // usunięcie czyści też skrót na ekranie głównym
+  std::string withSlot = "{\"version\":7,\"contacts\":[{\"id\":\"a\",\"name\":\"A\",\"number\":\"600100200\"}],"
+                         "\"home\":{\"slots\":[\"contact:a\",\"media\",\"\"]},\"changedBy\":\"Ania\"}";
+  Op rm;
+  rm.kind = Kind::RemoveContact;
+  rm.id = "a";
+  TEST_ASSERT_TRUE(apply(withSlot, rm, out, err));
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(7, c.version);  // wersja rodziny zostaje
+  TEST_ASSERT_EQUAL(0, (int)c.contacts.size());
+  TEST_ASSERT_TRUE(c.changedBy.empty());  // to nie zmiana od rodziny
+  rm.id = "nie-ma";
+  TEST_ASSERT_FALSE(apply(withSlot, rm, out, err));
+  // wielkość tekstu i dzwonek w zakresie
+  Op ts;
+  ts.kind = Kind::TextSize;
+  ts.value = 2;
+  TEST_ASSERT_TRUE(apply(doc, ts, out, err));
+  TEST_ASSERT_TRUE(cfg::parse(out.c_str(), out.size(), c, err));
+  TEST_ASSERT_EQUAL(2, c.textSize);
+  ts.value = 3;
+  TEST_ASSERT_FALSE(apply(doc, ts, out, err));
+  Op rv;
+  rv.kind = Kind::RingVolume;
+  rv.value = 0;
+  TEST_ASSERT_FALSE(apply(doc, rv, out, err));
+  // zdarzenie dla serwera
+  TEST_ASSERT_EQUAL_STRING("{\"type\":\"setting\",\"op\":\"removeContact\",\"id\":\"nie-ma\"}", eventJson(rm).c_str());
+  TEST_ASSERT_EQUAL_STRING("", normalizeNumber("+48+600").c_str());
+  TEST_ASSERT_EQUAL(5u, utf8Len("Józef"));
+}
+
+void test_weather_fresh() {
+  wx::Forecast f;
+  f.valid = true;
+  f.tempNow = 6;
+  f.today = {true, 3, 2, 7};
+  f.tomorrow = {true, 61, 1, 8};
+  f.fetchedAt = 1000;
+  f.dayKey = 2026 * 1000 + 328;
+  // świeża, ten sam dzień: bez zmian
+  wx::Forecast g = wx::fresh(f, 1000 + 60000, f.dayKey);
+  TEST_ASSERT_TRUE(g.valid && g.tomorrow.valid);
+  // ponad 3 godziny: temperatura "teraz" już nieaktualna
+  TEST_ASSERT_FALSE(wx::fresh(f, 1000 + wx::STALE_AFTER_MS + 1, f.dayKey).valid);
+  // po północy: wczorajsze jutro to dziś, jutra brak
+  g = wx::fresh(f, 1000 + 60000, f.dayKey + 1);
+  TEST_ASSERT_TRUE(g.valid);
+  TEST_ASSERT_EQUAL(61, g.today.code);
+  TEST_ASSERT_FALSE(g.tomorrow.valid);
+  // przez Nowy Rok
+  f.dayKey = 2026 * 1000 + 364;
+  TEST_ASSERT_EQUAL(61, wx::fresh(f, 2000, 2027 * 1000 + 0).today.code);
+  // dwa dni później: nic
+  TEST_ASSERT_FALSE(wx::fresh(f, 2000, 2027 * 1000 + 1).valid);
+  // millis() przekręcone po 49 dniach: różnica bez znaku dalej poprawna
+  f.dayKey = -1;
+  f.fetchedAt = 0xFFFFFF00u;
+  TEST_ASSERT_TRUE(wx::fresh(f, 0x100u, -1).valid);
+}
+
+void test_due_window() {
+  long from = 0, to = 0;
+  // pierwsze sprawdzenie: tylko bieżąca minuta
+  TEST_ASSERT_TRUE(rem::dueWindow(-1, 1000, from, to));
+  TEST_ASSERT_EQUAL(1000, from);
+  TEST_ASSERT_EQUAL(1000, to);
+  // ta sama minuta drugi raz: nic
+  TEST_ASSERT_FALSE(rem::dueWindow(1000, 1000, from, to));
+  // pętla spóźniona o 3 minuty: nadrabiamy wszystkie trzy
+  TEST_ASSERT_TRUE(rem::dueWindow(1000, 1003, from, to));
+  TEST_ASSERT_EQUAL(1001, from);
+  TEST_ASSERT_EQUAL(1003, to);
+  // zegar cofnięty o 2 minuty: bez powtórek
+  TEST_ASSERT_FALSE(rem::dueWindow(1003, 1001, from, to));
+  // duży skok w przód (ustawienie czasu) i w tył (poprawka złego zegara): od bieżącej minuty
+  TEST_ASSERT_TRUE(rem::dueWindow(1003, 5000, from, to));
+  TEST_ASSERT_EQUAL(5000, from);
+  TEST_ASSERT_TRUE(rem::dueWindow(5000, 1000, from, to));
+  TEST_ASSERT_EQUAL(1000, from);
+  TEST_ASSERT_EQUAL(1000, to);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_button_short_after_debounce);
@@ -371,6 +511,10 @@ int main() {
   RUN_TEST(test_config_broken);
   RUN_TEST(test_reminders);
   RUN_TEST(test_reminder_queue);
+  RUN_TEST(test_due_window);
+  RUN_TEST(test_weather_fresh);
+  RUN_TEST(test_local_edit);
+  RUN_TEST(test_sim_book);
   RUN_TEST(test_contract);
   RUN_TEST(test_rtc_codec);
   return UNITY_END();

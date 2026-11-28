@@ -12,10 +12,10 @@ import { Flash, Top, ago, plural, type SP } from "@/components/ui";
 const SECTIONS: { href: string; ico: IconName; title: string; desc: string; section: Section }[] = [
   { href: "kontakty", ico: "phone", title: "Kontakty", desc: "kto jest pod przyciskiem Dzwoń", section: "contacts" },
   { href: "zaproponuj", ico: "plus", title: "Zaproponuj kontakt", desc: "opiekun zdecyduje, czy dodać", section: "propose" },
-  { href: "ekran", ico: "home", title: "Ekran główny", desc: "trzy przyciski obok zegara", section: "home" },
+  { href: "ekran", ico: "home", title: "Ekran główny", desc: "zegar, data i pogoda", section: "home" },
   { href: "wiadomosci", ico: "message", title: "Wiadomości", desc: "krótki tekst na ekran LUMI", section: "messages" },
   { href: "przypomnienia", ico: "alarm", title: "Przypomnienia", desc: "leki, posiłki, wizyty - z potwierdzeniem", section: "reminders" },
-  { href: "radio", ico: "radio", title: "Radio i muzyka", desc: "stacje FM, internetowe, piosenki", section: "media" },
+  { href: "radio", ico: "radio", title: "Radio i muzyka", desc: "stacje, podcasty, piosenki", section: "media" },
   { href: "wyglad", ico: "sun", title: "Wygląd i dźwięk", desc: "wielkość tekstu, głośność, cisza nocna", section: "look" },
   { href: "pogoda", ico: "cloud", title: "Pogoda", desc: "miejscowość", section: "weather" },
   { href: "dostepnosc", ico: "access", title: "Dostępność", desc: "auto-odbieranie, drżenie dłoni, blokady", section: "access" },

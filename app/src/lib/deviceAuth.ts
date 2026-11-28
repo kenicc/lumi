@@ -25,11 +25,14 @@ export async function authDevice(req: Request): Promise<DeviceRow | null> {
   return d;
 }
 
+// Błąd bazy to nie "nikt nie dodał LUMI": urządzenie po kilku takich odpowiedziach kasuje
+// ustawienia i wraca do parowania, więc przy błędzie rzucamy (500 = "serwer niedostępny").
 export async function isClaimed(deviceId: string) {
-  const { count } = await admin()
+  const { count, error } = await admin()
     .from("members")
     .select("user_id", { count: "exact", head: true })
     .eq("device_id", deviceId)
     .eq("role", "guardian");
+  if (error) throw new Error(`isClaimed: ${error.message}`);
   return (count ?? 0) > 0;
 }

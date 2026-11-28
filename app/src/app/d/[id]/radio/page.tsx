@@ -2,7 +2,7 @@ import { addMedia, addPodcast, deleteMedia, moveMedia } from "../actions";
 import { MusicUpload } from "./MusicUpload";
 import { getProfile, requireMember } from "@/lib/access";
 import { currentSettings } from "@/lib/store";
-import { Flash, Top, type SP } from "@/components/ui";
+import { Flash, Top, plural, type SP } from "@/components/ui";
 
 const KIND = { fm: "Radio FM", web: "Radio z internetu", playlist: "Muzyka", podcast: "Podcast" } as const;
 
@@ -30,7 +30,7 @@ export default async function Radio({ params, searchParams }: { params: Promise<
               <div className="dim small">
                 {KIND[m.type]}
                 {m.type === "fm" && ` ${m.freq.toFixed(1).replace(".", ",")} MHz`}
-                {m.type === "playlist" && ` · ${m.urls.length} plików${m.from ? ` · od: ${m.from}` : ""}`}
+                {m.type === "playlist" && ` · ${m.urls.length} ${plural(m.urls.length, "plik", "pliki", "plików")}${m.from ? ` · od: ${m.from}` : ""}`}
                 {m.type === "podcast" && ` · najnowszy: ${m.episodes[0]?.title ?? "-"}`}
               </div>
             </div>

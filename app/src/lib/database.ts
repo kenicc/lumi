@@ -22,6 +22,7 @@ export interface Database {
           config: Json | null;
           config_version: number;
           applied_version: number;
+          local_settings: unknown | null;
           status: Json | null;
           variant: string | null;
           fw: string | null;

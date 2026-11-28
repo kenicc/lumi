@@ -7,6 +7,7 @@
 #include <string>
 
 #include "State.h"
+#include "Setup.h"
 #include "../audio/AudioOut.h"
 #include "../core/AtParse.h"
 #include "../core/Calendar.h"
@@ -156,7 +157,9 @@ void renderMissed() {
     at::formatNumber(missed.number, name, sizeof name);
   else
     strlcpy(name, "Numer zastrzeżony", sizeof name);
-  ui::label(col, ui::fitFont(name, ui::contentInnerW(), nameH), P.text, name, true);
+  // numer i imię w jednej linii (łamany numer czyta się źle); łamiemy tylko, gdy inaczej się nie da
+  const lv_font_t* nf = ui::lineFont(name, ui::contentInnerW());
+  ui::label(col, nf ? nf : ui::fitFont(name, ui::contentInnerW(), nameH), P.text, name, true);
   char when[48] = "";
   if (missed.at > 1700000000) {
     tm l;
@@ -588,9 +591,10 @@ void renderUnpaired() {
     lv_obj_align(col, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     if (wifiStep) {
+      // krócej niż kiedyś: pod spodem jest pasek "Ustaw bez telefonu"
       ui::label(col, f, P.accent, "Krok 1 z 2");
-      ui::label(col, f, P.text, "Zeskanuj aparatem telefonu, żeby połączyć się z LUMI.", true);
-      ui::label(col, &lumi_r20, P.dim, "Potem otwórz stronę", true);
+      ui::label(col, f, P.text, "Zeskanuj telefonem i wybierz swoją sieć.", true);
+      ui::label(col, &lumi_r20, P.dim, "potem otwórz");
       ui::label(col, f, P.text, "192.168.4.1");
     } else {
       char code[24];
@@ -628,37 +632,6 @@ void renderUnpaired() {
 }
 
 // Ekran serwisowy (Home 5 s): dla rodziny przy przeprowadzce lub ponownym dodaniu do aplikacji
-void renderService() {
-  auto& P = ui::pal();
-  auto& F = ui::fonts();
-  net::Cloud c = net::cloud();
-  lv_obj_t* col = ui::column(ui::content(), 4);
-  if (c == net::Cloud::Provisioning) {
-    ui::label(col, &lumi_b20, P.accent, "Wi-Fi z telefonu");
-    qrBox(col, pairing::wifiQr(identity::id(), identity::apPassword()), 120);
-    ui::label(col, &lumi_r20, P.text, "potem 192.168.4.1");
-  } else if (c == net::Cloud::Unclaimed) {
-    ui::label(col, &lumi_b20, P.accent, "Dodaj do aplikacji");
-    qrBox(col, pairing::pairUrl(identity::server(), identity::id(), identity::pairCode()), 120);
-    char code[24];
-    snprintf(code, sizeof code, "Kod: %s", identity::pairCode());
-    ui::label(col, &lumi_r20, P.text, code);
-  } else {
-    ui::label(col, &lumi_b20, P.accent, "Informacje");
-    ui::label(col, F.small, P.text, identity::id());
-    std::string w = net::wifiConnected() ? "Wi-Fi: " + net::wifiSsid() : "Wi-Fi: brak";
-    ui::label(col, F.small, P.text, w.c_str(), true);
-    ui::label(col, F.small, P.text, net::cloudName(c), true);
-    modem::Status m = modem::status();
-    char b[64];
-    snprintf(b, sizeof b, "%s, zasięg %d/4", modem::vendorName(m.vendor), m.bars);
-    ui::label(col, F.small, P.dim, b, true);
-  }
-  ui::setRail(0, IC_WIFI, "Wi-Fi", ui::Tone::Neutral);
-  ui::hideRail(1);
-  ui::setRail(2, IC_BACK, "Wróć", ui::Tone::Neutral);
-}
-
 void renderReminder() {
   auto& P = ui::pal();
   auto& F = ui::fonts();
@@ -713,11 +686,19 @@ void renderCall() {
   char name[40];
   callerName(name, sizeof name);
   lv_obj_t* col = centeredColumn();
-  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, 88, photoFor(k));
-  centerText(ui::label(col, ui::titleFont(name), P.text, name, true));
+  // przy odliczaniu auto-odbierania (dodatkowa linia) mniejsze zdjęcie, żeby wszystko się zmieściło
+  bool extra = (call.phase == Phase::Incoming && call.autoAt) || (call.phase == Phase::Active && call.autoAnswered);
+  ui::avatar(col, k ? k->name.c_str() : "?", k ? k->color : 0x5A6270, extra ? 60 : 88, photoFor(k));
+  const lv_font_t* nf = ui::lineFont(name, ui::contentInnerW());
+  centerText(ui::label(col, nf ? nf : F.body, P.text, name, true));
+  // napisy stanu jak największe; w trakcie rozmowy tylko słuchawka i czas (krój pod "59:59")
+  auto big = [&](const char* worst) {
+    const lv_font_t* f = ui::lineFont(worst, ui::contentInnerW());
+    return f ? f : F.small;
+  };
   switch (call.phase) {
     case Phase::Incoming:
-      ui::label(col, F.title, P.yes, "dzwoni");
+      ui::label(col, big("dzwoni"), P.yes, "dzwoni");
       live = call.autoAt ? ui::label(col, F.small, P.dim, "", true) : nullptr;
       ui::setRail(0, IC_PHONE, "Odbierz", ui::Tone::Yes);
       if (!call.silenced) ui::setRail(1, IC_BELL_SLASH, "Cisza", ui::Tone::Neutral);
@@ -725,13 +706,13 @@ void renderCall() {
       ui::setRail(2, IC_PHONE_SLASH, "Odrzuć", ui::Tone::No);
       break;
     case Phase::Outgoing:
-      ui::label(col, F.title, P.dim, "Łączę...");
+      ui::label(col, big("Łączę..."), P.dim, "Łączę...");
       ui::hideRail(0);
       ui::hideRail(1);
       ui::setRail(2, IC_PHONE_SLASH, "Rozłącz", ui::Tone::No);
       break;
     case Phase::Active:
-      live = ui::label(col, F.title, P.yes, "Rozmowa");
+      live = ui::label(col, big(IC_PHONE " 59:59"), P.yes, IC_PHONE " 0:00");
       if (call.autoAnswered) centerText(ui::label(col, F.small, P.accent, "Rozmowa otwarta, możesz mówić", true));
       ui::hideRail(0);
       ui::hideRail(1);
@@ -747,7 +728,7 @@ void updateLive() {
   uint32_t now = millis();
   if (call.phase == Phase::Active) {
     uint32_t s = (now - call.startedAt) / 1000;
-    snprintf(b, sizeof b, "Rozmowa %u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
+    snprintf(b, sizeof b, IC_PHONE " %u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
     lv_label_set_text(live, b);
   } else if (call.phase == Phase::Incoming && call.autoAt && call.autoStage == 0) {
     int32_t left = (int32_t)(call.autoAt - now);
@@ -776,6 +757,10 @@ int bottomSlot(Key k) {
 }
 
 void showHints() {
+  if (scr == Screen::Unpaired && call.phase == Phase::None) {
+    ui::hints(nullptr, ui::Tone::Neutral, "Ustaw bez telefonu");
+    return;
+  }
   int h = bottomSlot(Key::Home), c = bottomSlot(Key::Call);
   const char* ht = h >= 0 ? ui::railText(h) : nullptr;
   const char* ct = c >= 0 ? ui::railText(c) : nullptr;
@@ -787,7 +772,8 @@ void render() {
   // Etykiety przycisków na każdym ekranie oprócz zegara (tam ma być czysto: godzina, data, pogoda).
   // Tryb jednego przycisku zawsze z etykietami - wyróżnienie musi być widać.
   bool cleanHome = call.phase == Phase::None && !missed.has &&
-                   (scr == Screen::Home || (scr == Screen::Message && inbox.empty()));
+                   (scr == Screen::Home || scr == Screen::Weather || scr == Screen::Unpaired ||
+                    (scr == Screen::Message && inbox.empty()));
   ui::setRailLabels(C.oneButton || !cleanHome);
   ui::clearContent();
   // tło testowe tylko pod zegarem i nie w wysokim kontraście (tam liczy się wyłącznie czytelność)
@@ -805,7 +791,7 @@ void render() {
       case Screen::Weather: renderWeather(); break;
       case Screen::Confirm: renderConfirm(); break;
       case Screen::Unpaired: renderUnpaired(); break;
-      case Screen::Service: renderService(); break;
+      case Screen::Service: localsetup::render(); break;
       case Screen::Reminder: renderReminder(); break;
       case Screen::Message:
         if (inbox.empty()) renderHome();

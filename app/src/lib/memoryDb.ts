@@ -32,6 +32,10 @@ export function memoryDb() {
         filters.push((r) => r[k] != null && (r[k] as number | string) < v);
         return q;
       },
+      gte(k: string, v: number | string) {
+        filters.push((r) => r[k] != null && (r[k] as number | string) >= v);
+        return q;
+      },
       order(k: string, opts?: { ascending?: boolean }) {
         sortBy = { k, asc: opts?.ascending !== false };
         return q;
@@ -65,7 +69,9 @@ export function memoryDb() {
         return q;
       },
       ilike(k: string, v: string) {
-        filters.push((r) => String(r[k] ?? "").toLowerCase() === v.toLowerCase());
+        // jak w Postgresie: % = dowolny ciąg, _ = jeden znak, bez wielkości liter
+        const re = new RegExp("^" + v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".") + "$", "is");
+        filters.push((r) => re.test(String(r[k] ?? "")));
         return q;
       },
       delete() {
@@ -87,7 +93,7 @@ export function memoryDb() {
     function run(): Row[] {
       if (op === "insert") {
         const list = Array.isArray(payload) ? payload : [payload];
-        tables[table].push(...list.map((r) => ({ id: r.id ?? (seq += 1), ...r })));
+        tables[table].push(...list.map((r) => ({ id: r.id ?? (seq += 1), created_at: new Date().toISOString(), ...r })));  // jak domyślne wartości w Postgresie
         return list;
       }
       if (op === "upsert") {

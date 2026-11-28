@@ -16,5 +16,6 @@ class File {
 struct LittleFSStub {
   std::string root = "data";
   File open(const char* path, const char* mode) { return File(fopen((root + path).c_str(), mode)); }
+  bool remove(const char* path) { return ::remove((root + path).c_str()) == 0; }
 };
 extern LittleFSStub LittleFS;

@@ -9,23 +9,56 @@ export interface Alert {
 
 export const OFFLINE_AFTER_MS = 2 * 60 * 60 * 1000;
 
-export function statusAlerts(prev: DeviceStatus | null, next: DeviceStatus, name: string): Alert[] {
-  const out: Alert[] = [];
-  const was = prev?.battery;
-  const now = next.battery;
-  if (now !== undefined && !next.charging) {
-    for (const level of [20, 10]) {
-      if (now <= level && (was === undefined || was > level)) {
-        out.push({ title: `${name}: słaba bateria (${Math.round(now)}%)`, body: "Przypomnij o podłączeniu ładowarki - rozładowane LUMI nie odbierze rozmowy." });
-        break;
-      }
-    }
+const BATTERY_LEVELS = [20, 10];  // od najwyższego
+const NONE = 101;                 // żaden próg nie zgłoszony
+const REARM = 5;                  // o tyle musi wzrosnąć, żeby ten sam próg zgłosić znowu
+
+/**
+ * Najniższy zgłoszony próg baterii i ewentualny nowy alarm. Procent liczony z napięcia skacze
+ * (zwłaszcza gdy modem nadaje): 21-20-21-20 nie może dawać powiadomienia za każdym razem.
+ * Próg uzbraja się ponownie po ładowaniu albo po wzroście o REARM punktów.
+ */
+export function batteryAlert(prev: DeviceStatus | null, next: DeviceStatus): { level: number; alert: number | null } {
+  let level = prev?.alertLevel;
+  if (level === undefined) {
+    // raporty sprzed tej zmiany: zgłoszony był próg, poniżej którego już był poprzedni odczyt
+    const was = prev?.battery;
+    level = was === undefined ? NONE : ([...BATTERY_LEVELS].reverse().find((l) => was <= l) ?? NONE);
   }
+  const now = next.battery;
+  if (now === undefined) return { level, alert: null };
+  if (next.charging) return { level: NONE, alert: null };
+  while (level !== NONE && now >= level + REARM) {
+    const i = BATTERY_LEVELS.indexOf(level);
+    level = i > 0 ? BATTERY_LEVELS[i - 1] : NONE;
+  }
+  const crossed = [...BATTERY_LEVELS].reverse().find((l) => now <= l && l < level!);
+  return crossed === undefined ? { level, alert: null } : { level: crossed, alert: crossed };
+}
+
+export function statusAlerts(prev: DeviceStatus | null, next: DeviceStatus, name: string, now = Date.now()): Alert[] {
+  const out: Alert[] = [];
+  if (batteryAlert(prev, next).alert !== null)
+    out.push({ title: `${name}: słaba bateria (${Math.round(next.battery!)}%)`, body: "Przypomnij o podłączeniu ładowarki - rozładowane LUMI nie odbierze rozmowy." });
   if (prev?.sim !== false && next.sim === false)
     out.push({ title: `${name}: brak karty SIM`, body: "LUMI nie może dzwonić ani odbierać rozmów. Sprawdź kartę SIM." });
-  if (prev?.registered !== false && next.registered === false && next.sim !== false && prev)
-    out.push({ title: `${name}: brak zasięgu`, body: "LUMI nie łączy się z siecią komórkową. Rozmowy nie dochodzą." });
+  if (signalAlert(prev, next, now).alert)
+    out.push({ title: `${name}: brak zasięgu`, body: "LUMI nie łączy się z siecią komórkową od 10 minut. Rozmowy nie dochodzą." });
   return out;
+}
+
+export const NO_SIGNAL_ALERT_MS = 10 * 60 * 1000;
+
+/**
+ * Brak zasięgu zgłaszamy dopiero po 10 minutach i raz na przerwę: chwilowa utrata sieci (zmiana
+ * stacji, winda) nie może budzić rodziny. Stan trzyma serwer w statusie (lostAt, signalAlerted).
+ */
+export function signalAlert(prev: DeviceStatus | null, next: DeviceStatus, now = Date.now()) {
+  if (next.registered !== false || next.sim === false) return { lostAt: undefined, alerted: false, alert: false };
+  const lostAt = prev?.registered === false && prev.lostAt ? prev.lostAt : new Date(now).toISOString();
+  const already = prev?.registered === false && !!prev.signalAlerted;
+  const alert = !already && now - Date.parse(lostAt) >= NO_SIGNAL_ALERT_MS;
+  return { lostAt, alerted: already || alert, alert };
 }
 
 export function offlineAlert(name: string): Alert {
@@ -34,4 +67,12 @@ export function offlineAlert(name: string): Alert {
 
 export function backOnlineAlert(name: string): Alert {
   return { title: `${name}: znów w sieci`, body: "LUMI połączyło się ponownie." };
+}
+
+export function silentReminderAlert(name: string, items: { text: string; time: string }[]): Alert {
+  const list = items.map((r) => `„${r.text}” (${r.time})`).join(", ");
+  return {
+    title: `${name}: nie wiadomo, czy było przypomnienie`,
+    body: `${list} - LUMI nie łączy się od wcześniej, więc mogło nie przypomnieć. Warto zadzwonić.`,
+  };
 }

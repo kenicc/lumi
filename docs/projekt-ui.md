@@ -114,7 +114,7 @@ Kontrast sprawdź dla każdej pary tekst/tło **w obu motywach**. Wtyczka Figmy 
 | 13 | **Parowanie, krok 1** | kod QR do Wi-Fi LUMI plus instrukcja dla rodziny | - |
 | 14 | **Parowanie, krok 2** | kod QR do aplikacji plus kod tekstowy | - |
 | 15 | **Tryb jednego przycisku** | dla osób, które nie trafiają w przyciski: wyróżnienie przechodzi po kolei po etykietach, jedno naciśnięcie dowolnego przycisku wybiera | wszystkie, z wyróżnieniem |
-| 16 | **Ekran serwisowy** | wersja, sieć, modem, bateria (dla rodziny, nie dla seniora) | Wróć |
+| 16 | **Ustawienia** (przytrzymany Dom) | Wi-Fi z hasłem wpisywanym rolką, kontakty (z karty SIM, wpisane), wielkość tekstu, dzwonek, aplikacja rodziny, informacje | Wyżej / Wybierz / Niżej, Dom = wstecz |
 | 17 | **Test sprzętu** | kroki: ekran (pasy kolorów), przyciski, rolka, modem, Wi-Fi, wynik | według kroku |
 
 ### Nakładki (pojawiają się na dowolnym ekranie)

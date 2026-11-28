@@ -8,6 +8,7 @@ import { deleteDeviceFiles } from "@/lib/cleanup";
 import { DEMO } from "@/lib/demo";
 import { str, newId } from "@/lib/form";
 import { CONTACT_COLORS, defaultSettings } from "@/lib/schema";
+import { fromLocal, LocalSnapshotSchema, sameNumber } from "@/lib/deviceSettings";
 import { pairedText } from "@/lib/summary";
 import { admin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -71,7 +72,7 @@ export async function claim(fd: FormData) {
   if (!ID_RE.test(deviceId) || !/^[A-Z2-9]{8}$/.test(code)) fail("Nieprawidłowy kod. Zeskanuj go jeszcze raz z ekranu LUMI.");
 
   const db = admin();
-  const { data: dev } = await db.from("devices").select("id, pair_hash").eq("id", deviceId).maybeSingle();
+  const { data: dev } = await db.from("devices").select("id, pair_hash, local_settings").eq("id", deviceId).maybeSingle();
   if (!dev) fail("LUMI jeszcze nie połączyło się z serwerem. Sprawdź, czy ma Wi-Fi, i spróbuj za chwilę.");
   const { data: mine } = await db.from("members").select("role").eq("device_id", deviceId).eq("user_id", user.id).maybeSingle();
   if (mine) redirect(`/d/${deviceId}`);
@@ -86,19 +87,24 @@ export async function claim(fd: FormData) {
   const { data: won } = await db.from("devices").update({ pair_hash: null }).eq("id", deviceId).eq("pair_hash", pairHash!).select("id");
   if (!won?.length) fail("Ktoś właśnie dodał to LUMI. Poproś go o zaproszenie.");
 
-  const settings = defaultSettings();
+  // to, co senior ustawił na samym LUMI (kontakty, tekst, dzwonek), zamiast pustej listy
+  const local = LocalSnapshotSchema.safeParse((dev as { local_settings?: unknown } | null)?.local_settings);
+  const settings = fromLocal(defaultSettings(), local.success ? local.data : null);
   // numer opiekuna od razu jako pierwszy kontakt i przycisk na ekranie głównym
   const phone = str(fd, "phone");
-  if (/^\+?[0-9 ]{9,20}$/.test(phone)) {
+  if (/^\+?[0-9 ]{9,20}$/.test(phone) && !settings.contacts.some((c) => sameNumber(c.number, phone))) {
     const id = newId();
     settings.contacts.push({ id, name: profile.display_name, number: phone, color: CONTACT_COLORS[0], autoAnswer: false });
     settings.home.slots[0] = `contact:${id}`;
   }
   const summary = pairedText(profile.form);
-  const config = buildDeviceConfig(settings, 1, profile.display_name, summary);
+  // LUMI mogło mieć ustawienia z poprzedniego parowania - nowa wersja musi być od nich wyższa
+  const { data: prevRow } = await db.from("devices").select("applied_version").eq("id", deviceId).single();
+  const version = ((prevRow as { applied_version: number | null } | null)?.applied_version ?? 0) + 1;
+  const config = buildDeviceConfig(settings, version, profile.display_name, summary);
   const name = str(fd, "name").slice(0, 40) || "LUMI";
   await db.from("members").insert({ device_id: deviceId, user_id: user.id, role: "guardian" });
-  await db.from("devices").update({ name, settings, config, config_version: 1, applied_version: 0 }).eq("id", deviceId);
-  await db.from("changes").insert({ device_id: deviceId, user_id: user.id, author: profile.display_name, summary, version: 1 });
+  await db.from("devices").update({ name, settings, config, config_version: version, local_settings: null }).eq("id", deviceId);
+  await db.from("changes").insert({ device_id: deviceId, user_id: user.id, author: profile.display_name, summary, version });
   redirect(`/d/${deviceId}?ok=1`);
 }

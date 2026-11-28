@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPublicHttpUrl, parseFeed } from "@/lib/podcastParse";
+import { isPublicHttpUrl, mapLimit, parseFeed, withEpisodes } from "@/lib/podcastParse";
 import { buildDeviceConfig } from "@/lib/config";
 import { SettingsSchema } from "@/lib/schema";
 import { sample } from "./fixtures";
@@ -53,5 +53,41 @@ describe("podcast", () => {
     const doc = buildDeviceConfig(s, 1, "", "");
     expect(doc.media[4]).toEqual({ type: "podcast", name: "Audycje", urls: ["https://cdn.example.com/e3.mp3"], titles: ["Odcinek 3"] });
     expect(JSON.stringify(doc)).not.toContain("feeds.example.com");
+  });
+});
+
+describe("mapLimit", () => {
+  it("zachowuje kolejność i nie przekracza limitu jednoczesnych zadań", async () => {
+    let running = 0, peak = 0;
+    const out = await mapLimit([30, 5, 20, 1, 10, 2, 15], 3, async (ms) => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, ms));
+      running--;
+      return ms * 2;
+    });
+    expect(out).toEqual([60, 10, 40, 2, 20, 4, 30]);
+    expect(peak).toBe(3);
+    expect(await mapLimit([], 3, async (x) => x)).toEqual([]);
+  });
+});
+
+describe("withEpisodes", () => {
+  const feedOf = () => {
+    const m = sample().media.find((x) => x.type === "podcast");
+    if (!m || m.type !== "podcast") throw new Error("fixture bez podcastu");
+    return m;
+  };
+  it("podmienia odcinki tylko przy nowym odcinku", () => {
+    const pod = feedOf();
+    const fresh = [{ title: "Nowy", url: "https://cdn.example.com/new.mp3" }, ...pod.episodes].slice(0, pod.episodes.length);
+    const next = withEpisodes(sample(), new Map([[pod.feed, fresh]]));
+    const m = next?.media.find((x) => x.type === "podcast");
+    expect(m && m.type === "podcast" && m.episodes[0].title).toBe("Nowy");
+    expect(withEpisodes(sample(), new Map([[pod.feed, pod.episodes]]))).toBeNull();
+  });
+  it("błąd kanału zostawia poprzednie odcinki", () => {
+    expect(withEpisodes(sample(), new Map([[feedOf().feed, "Serwer podcastu odpowiedział błędem (500)"]]))).toBeNull();
+    expect(withEpisodes(sample(), new Map())).toBeNull();
   });
 });

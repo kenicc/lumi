@@ -1,6 +1,8 @@
 // Parsowanie kanału RSS podcastu bez zależności (kanały to prosty XML; potrzebujemy tylko tytułu
 // i pliku audio każdego odcinka). Osobny plik bez "server-only", żeby dało się go testować.
 
+import type { Settings } from "./schema";
+
 export type Episode = { title: string; url: string };
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
@@ -81,4 +83,34 @@ export function isPublicIp(ip: string): boolean {
     return !(h === "::1" || h === "::" || h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"));
   }
   return false;
+}
+
+/** Wykonuje fn dla każdego elementu, najwyżej `limit` naraz; wyniki w kolejności wejścia. */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/** Ustawienia z nowymi odcinkami albo null, gdy żaden kanał nie ma nic nowego. */
+export function withEpisodes(settings: Settings, byFeed: Map<string, Episode[] | string>): Settings | null {
+  const next = structuredClone(settings);
+  let changed = false;
+  for (const m of next.media) {
+    if (m.type !== "podcast") continue;
+    const eps = byFeed.get(m.feed);
+    if (!eps || typeof eps === "string") continue;  // chwilowy błąd kanału: zostają poprzednie odcinki
+    if (eps[0].url !== m.episodes[0]?.url || eps.length !== m.episodes.length) {
+      m.episodes = eps;
+      changed = true;
+    }
+  }
+  return changed ? next : null;
 }

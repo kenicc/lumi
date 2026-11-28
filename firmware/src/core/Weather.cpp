@@ -40,4 +40,17 @@ const char* hintFor(int c, float tMin) {
   return "";
 }
 
+Forecast fresh(Forecast f, uint32_t nowMs, int todayKey) {
+  if (!f.valid) return f;
+  if (nowMs - f.fetchedAt > STALE_AFTER_MS) f.valid = false;
+  if (f.dayKey >= 0 && todayKey >= 0 && todayKey != f.dayKey) {
+    // następny dzień (także przez Nowy Rok: rok+1, dzień 0) - jutro staje się dziś
+    bool nextDay = todayKey == f.dayKey + 1 || (todayKey / 1000 == f.dayKey / 1000 + 1 && todayKey % 1000 == 0);
+    f.today = nextDay ? f.tomorrow : Day{};
+    f.tomorrow = Day{};
+    if (!nextDay) f.valid = false;
+  }
+  return f;
+}
+
 }  // namespace wx

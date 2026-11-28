@@ -22,7 +22,7 @@ export default async function Reminders({ params, searchParams }: { params: Prom
       <Flash ok={ok} err={err} />
       <ul className="list card">
         {s.reminders.length === 0 && <li className="dim" style={{ padding: 8 }}>Brak przypomnień.</li>}
-        {s.reminders.map((r) => (
+        {[...s.reminders].sort((a, b) => a.time.localeCompare(b.time)).map((r) => (
           <li key={r.id} className="row" style={{ padding: "10px 0" }}>
             <b style={{ fontSize: 22, minWidth: 64 }}>{r.time}</b>
             <div className="grow">

@@ -114,24 +114,38 @@ bool parseCclk(const char* line, int64_t& utc) {
   return true;
 }
 
-static size_t lastDigits(const char* s, char* out, size_t want) {
-  char buf[32];
+// Numer w postaci pełnej z kierunkowym kraju, same cyfry: "+48 600 100 200", "0048600100200",
+// "48600100200" i "600100200" -> "48600100200". Numer bez kierunkowego traktujemy jako polski.
+static size_t canonical(const char* s, char* out, size_t cap) {
+  while (*s == ' ') s++;
+  bool intl = *s == '+';
+  char d[24];
   size_t n = 0;
-  for (; *s && n < sizeof(buf); s++)
-    if (isdigit((unsigned char)*s)) buf[n++] = *s;
-  size_t start = n > want ? n - want : 0;
-  size_t k = n - start;
-  memcpy(out, buf + start, k);
-  out[k] = 0;
-  return k;
+  for (; *s && n + 1 < sizeof(d); s++)
+    if (isdigit((unsigned char)*s)) d[n++] = *s;
+  d[n] = 0;
+  const char* p = d;
+  if (!intl && n > 2 && p[0] == '0' && p[1] == '0') {
+    intl = true;
+    p += 2;
+    n -= 2;
+  }
+  const char* cc = (!intl && n == 9) ? "48" : "";
+  size_t need = strlen(cc) + n;
+  if (need + 1 > cap) return 0;
+  strcpy(out, cc);
+  strcat(out, p);
+  return need;
 }
 
+// Cały numer, nie końcówka: przy porównaniu ostatnich cyfr niemiecki +49 170 1234567 "pasowałby"
+// do polskiego 701 234 567 - a od tego zależy auto-odbieranie i "tylko od kontaktów".
 bool sameNumber(const char* a, const char* b) {
   if (!a || !b) return false;
-  char x[16], y[16];
-  size_t nx = lastDigits(a, x, 9), ny = lastDigits(b, y, 9);
-  if (nx < 3 || ny < 3) return false;  // krótkie numery serwisowe porównuj w całości
-  return nx == ny && strcmp(x, y) == 0;
+  char x[24], y[24];
+  size_t nx = canonical(a, x, sizeof x), ny = canonical(b, y, sizeof y);
+  if (nx < 3 || ny < 3) return false;  // zastrzeżony albo pusty
+  return strcmp(x, y) == 0;
 }
 
 void formatNumber(const char* in, char* out, size_t n) {
@@ -152,6 +166,96 @@ void formatNumber(const char* in, char* out, size_t n) {
     out[o++] = digits[i];
   }
   out[o] = 0;
+}
+
+static bool isHexUcs2(const char* s, size_t len) {
+  if (len == 0 || len % 4) return false;
+  for (size_t i = 0; i < len; i++)
+    if (!isxdigit((unsigned char)s[i])) return false;
+  return true;
+}
+
+void ucs2Decode(const char* in, char* out, size_t n) {
+  if (!n) return;
+  size_t len = strlen(in);
+  if (!isHexUcs2(in, len)) {
+    strncpy(out, in, n - 1);
+    out[n - 1] = 0;
+    return;
+  }
+  size_t o = 0;
+  for (size_t i = 0; i + 4 <= len; i += 4) {
+    char h[5] = {in[i], in[i + 1], in[i + 2], in[i + 3], 0};
+    unsigned cp = (unsigned)strtoul(h, nullptr, 16);
+    char u[3];
+    size_t k;
+    if (cp < 0x80) {
+      u[0] = (char)cp;
+      k = 1;
+    } else if (cp < 0x800) {
+      u[0] = (char)(0xC0 | (cp >> 6));
+      u[1] = (char)(0x80 | (cp & 0x3F));
+      k = 2;
+    } else {
+      u[0] = (char)(0xE0 | (cp >> 12));
+      u[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+      u[2] = (char)(0x80 | (cp & 0x3F));
+      k = 3;
+    }
+    if (o + k >= n) break;  // nie tniemy znaku w połowie
+    memcpy(out + o, u, k);
+    o += k;
+  }
+  out[o] = 0;
+}
+
+// kolejne pole w cudzysłowie od p; zwraca wskaźnik za zamykającym cudzysłowem albo nullptr
+static const char* quoted(const char* p, char* out, size_t n) {
+  p = strchr(p, '"');
+  if (!p) return nullptr;
+  const char* e = strchr(++p, '"');
+  if (!e) return nullptr;
+  size_t k = (size_t)(e - p) < n - 1 ? (size_t)(e - p) : n - 1;
+  memcpy(out, p, k);
+  out[k] = 0;
+  return e + 1;
+}
+
+static void field(const char* raw, bool ucs2, char* out, size_t n) {
+  if (ucs2) {
+    ucs2Decode(raw, out, n);
+  } else {
+    strncpy(out, raw, n - 1);
+    out[n - 1] = 0;
+  }
+}
+
+bool parseCpbr(const char* line, bool ucs2, char* number, size_t nn, char* name, size_t nm) {
+  if (strncmp(line, "+CPBR:", 6) != 0) return false;
+  char rawNum[96], rawName[200];
+  const char* p = quoted(line + 6, rawNum, sizeof rawNum);
+  if (!p) return false;
+  p = strchr(p, ',');  // typ numeru
+  if (!p) return false;
+  p = strchr(p + 1, ',');
+  if (!p || !quoted(p, rawName, sizeof rawName)) return false;
+  // numer: niektóre modemy (A7670E) podają go zwykłymi cyframi także przy UCS2
+  field(rawNum, ucs2 && strlen(rawNum) % 4 == 0 && !strncmp(rawNum, "00", 2), number, nn);
+  field(rawName, ucs2, name, nm);
+  // pusty wpis albo numer z literami (np. *100# operatora) - nie kontakt
+  if (!number[0] || !name[0]) return false;
+  for (const char* q = number; *q; q++)
+    if (!isdigit((unsigned char)*q) && !(q == number && *q == '+')) return false;
+  return true;
+}
+
+bool parseCpbrRange(const char* line, int& last) {
+  const char* p = strstr(line, "+CPBR:");
+  if (!p) return false;
+  p = strchr(p, '-');
+  if (!p) return false;
+  last = atoi(p + 1);
+  return last > 0;
 }
 
 }  // namespace at

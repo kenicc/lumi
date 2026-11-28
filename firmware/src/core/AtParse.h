@@ -37,12 +37,22 @@ bool parseCclk(const char* line, int64_t& utc);
 // "+CBC: 0,76,3987" -> napięcie w mV (SIM800)
 bool parseCbc(const char* line, int& mv);
 
-// Porównanie numerów niezależnie od zapisu (+48, 0048, spacje): ostatnie 9 cyfr.
+// Porównanie numerów niezależnie od zapisu (+48, 0048, 48, spacje): pełny numer z kierunkowym,
+// numer bez kierunkowego traktowany jako polski.
 bool sameNumber(const char* a, const char* b);
 
 // "600100200" -> "600 100 200" (czytelniej dla seniora)
 void formatNumber(const char* in, char* out, size_t n);
 
 int64_t daysFromCivil(int y, unsigned m, unsigned d);
+
+// Książka telefoniczna karty SIM: "+CPBR: 1,"600100200",129,"Ania"". Przy AT+CSCS="UCS2" modem podaje
+// imię (a SIM800 także numer) jako szesnastkowy UCS2 - dekodujemy do UTF-8 (polskie litery).
+// ucs2 = modem przyjął AT+CSCS="UCS2" (bez tego "ABBA" albo "60010020" wyglądałyby jak hex).
+bool parseCpbr(const char* line, bool ucs2, char* number, size_t nn, char* name, size_t nm);
+// "0041006E0069006100" -> "Ania"; tekst, który nie jest UCS2 w hex, zostaje bez zmian
+void ucs2Decode(const char* in, char* out, size_t n);
+// "+CPBR: (1-250),40,14" -> największy indeks
+bool parseCpbrRange(const char* line, int& last);
 
 }  // namespace at

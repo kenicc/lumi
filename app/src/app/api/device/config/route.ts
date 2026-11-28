@@ -1,6 +1,8 @@
 // Dokument konfiguracji dla urządzenia. 304 gdy urządzenie ma już tę wersję.
 import { NextResponse } from "next/server";
 import { authDevice, isClaimed } from "@/lib/deviceAuth";
+import { buildDeviceConfig } from "@/lib/config";
+import { currentSettings } from "@/lib/store";
 import { admin } from "@/lib/supabase/admin";
 
 export async function GET(req: Request) {
@@ -20,6 +22,21 @@ export async function GET(req: Request) {
     .limit(1)
     .maybeSingle();
   const headers = { "Cache-Control": "no-store", "X-Lumi-Inbox": String(top?.id ?? 0) };
-  if (have >= d.config_version) return new NextResponse(null, { status: 304, headers });
+  if (have === d.config_version) return new NextResponse(null, { status: 304, headers });
+  if (have > d.config_version) {
+    // LUMI ma wyższą wersję niż serwer (np. baza odtworzona z kopii): urządzenie odrzuca starsze
+    // wersje, więc podbijamy numer ponad jego - inaczej zmiany rodziny nigdy by nie dotarły
+    const settings = currentSettings(d.settings);
+    const version = have + 1;
+    const config = buildDeviceConfig(settings, version, "", "");
+    const { data: upd } = await admin()
+      .from("devices")
+      .update({ config, config_version: version })
+      .eq("id", d.id)
+      .eq("config_version", d.config_version)
+      .select("id");
+    if (!upd?.length) return new NextResponse(null, { status: 304, headers });  // równoległy zapis - następny cykl
+    return NextResponse.json(config, { headers });
+  }
   return NextResponse.json(d.config, { headers });
 }

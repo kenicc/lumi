@@ -59,7 +59,9 @@ export async function getProfile(userId: string) {
 export async function acceptInvites(userId: string, email: string | undefined) {
   if (!email) return;
   const db = admin();
-  const { data: inv } = await db.from("invites").select("id, device_id, role").ilike("email", email);
+  // dokładne porównanie (zaproszenia zapisujemy małymi literami): w ilike znaki % i _ są wzorcem,
+  // a wolno ich używać w adresach - adres "kasi_@..." nie może przejąć zaproszenia dla "kasia@..."
+  const { data: inv } = await db.from("invites").select("id, device_id, role").eq("email", email.trim().toLowerCase());
   for (const i of (inv ?? []) as { id: string; device_id: string; role: Role }[]) {
     await db.from("members").upsert({ device_id: i.device_id, user_id: userId, role: i.role }, { onConflict: "device_id,user_id", ignoreDuplicates: true });
     await db.from("invites").delete().eq("id", i.id);
