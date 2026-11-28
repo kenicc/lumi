@@ -262,10 +262,19 @@ void startReadyReminder() {
 }
 
 long remChecked = -1;  // ostatnia sprawdzona minuta (od 1970)
+// Kopia w pamięci RTC: przeżywa restart (watchdog, spadek napięcia), więc przypomnienie z minuty, w
+// której LUMI się restartowało, też zostanie pokazane. Suma kontrolna odrzuca śmieci po włączeniu zasilania.
+#ifndef RTC_NOINIT_ATTR
+#define RTC_NOINIT_ATTR
+#endif
+RTC_NOINIT_ATTR long remCheckedRtc;
+RTC_NOINIT_ATTR uint32_t remCheckedSum;
+constexpr uint32_t REM_SUM_SALT = 0x5EED1A55u;
 
 // Wywoływane co sekundę; każda minuta jest sprawdzona dokładnie raz, nawet gdy pętla się spóźni
 void checkReminders() {
   if (!haveConfig || !timeValid()) return;
+  if (remChecked < 0 && remCheckedSum == ((uint32_t)remCheckedRtc ^ REM_SUM_SALT)) remChecked = remCheckedRtc;
   long from, to;
   if (!rem::dueWindow(remChecked, (long)(time(nullptr) / 60), from, to)) return;
   for (long m = from; m <= to; m++) {
@@ -275,6 +284,8 @@ void checkReminders() {
     reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
   }
   remChecked = to;
+  remCheckedRtc = to;
+  remCheckedSum = (uint32_t)to ^ REM_SUM_SALT;
 }
 
 // Prawa kolumna: znaczenie zależy od ekranu, ale góra = tak, dół = nie/wstecz tam, gdzie to możliwe
