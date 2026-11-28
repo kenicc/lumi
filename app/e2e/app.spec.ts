@@ -49,6 +49,18 @@ test("wiadomość: wysłana czeka na przeczytanie", async ({ page }) => {
   await expect(page.locator("li", { hasText: "Dzwonię wieczorem" })).toContainText("czeka na przeczytanie");
 });
 
+test("wiadomość wysłana dwa razy pod rząd (podwójne stuknięcie) trafia na LUMI raz", async ({ page }) => {
+  await page.goto(`${D}/wiadomosci`);
+  for (let k = 0; k < 2; k++) {
+    await page.goto(`${D}/wiadomosci`);
+    await page.locator("input[name=text]").fill("Zadzwonię o 18");
+    await page.getByRole("button", { name: "Wyślij na LUMI" }).click();
+    await expect(page).toHaveURL(/ok=1/);
+  }
+  await page.goto(`${D}/wiadomosci`);
+  await expect(page.locator("li", { hasText: "Zadzwonię o 18" })).toHaveCount(1);
+});
+
 test("ekran główny: pora dnia znika z podglądu i trafia do historii zmian", async ({ page }) => {
   await page.goto(`${D}/ekran`);
   const preview = page.locator(".card").first();

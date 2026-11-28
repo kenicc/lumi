@@ -270,12 +270,23 @@ export async function removeContactPhoto(id: string, cid: string) {
 
 // ---------- wiadomości ----------
 
+const MSG_DUP_MS = 2 * 60 * 1000;
+const MAX_UNREAD_PER_PERSON = 5;  // senior czyta wiadomości po kolei - kolejka nie może rosnąć bez końca
+const MAX_PENDING_PROPOSALS = 5;
+
 export async function sendMessage(id: string, fd: FormData) {
   const { user } = await requireMember(id, "messages");
   const text = str(fd, "text").replace(/\s+/g, " ").slice(0, 120);
   if (!text) redirect(p(id, `/wiadomosci?err=${encodeURIComponent("Wpisz wiadomość")}`));
+  const db = admin();
+  const { data: mine } = await db.from("messages").select("text, created_at").eq("device_id", id).eq("user_id", user.id).is("read_at", null);
+  const unread = (mine ?? []) as { text: string; created_at: string }[];
+  // podwójne stuknięcie "Wyślij": senior nie powinien dostać tego samego dwa razy
+  if (unread.some((m) => m.text === text && Date.now() - Date.parse(m.created_at) < MSG_DUP_MS)) redirect(p(id, "/wiadomosci?ok=1"));
+  if (unread.length >= MAX_UNREAD_PER_PERSON)
+    redirect(p(id, `/wiadomosci?err=${encodeURIComponent(`Na LUMI czeka już ${MAX_UNREAD_PER_PERSON} Twoich nieprzeczytanych wiadomości`)}`));
   const profile = await getProfile(user.id);
-  await admin().from("messages").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Rodzina", text });
+  await db.from("messages").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Rodzina", text });
   revalidatePath(p(id, "/wiadomosci"));
   redirect(p(id, "/wiadomosci?ok=1"));
 }
@@ -287,8 +298,15 @@ export async function proposeContact(id: string, fd: FormData) {
   const back = p(id, "/zaproponuj");
   const parsed = ContactSchema.pick({ name: true, number: true }).safeParse({ name: str(fd, "name"), number: str(fd, "number") });
   if (!parsed.success) redirect(`${back}?err=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane")}`);
+  const db = admin();
+  const { data: mine } = await db.from("contact_proposals").select("number").eq("device_id", id).eq("user_id", user.id).eq("status", "pending");
+  const pending = (mine ?? []) as { number: string }[];
+  const digits = (n: string) => n.replace(/\D/g, "");
+  if (pending.some((x) => digits(x.number) === digits(parsed.data!.number))) redirect(`${back}?ok=1`);  // już czeka
+  if (pending.length >= MAX_PENDING_PROPOSALS)
+    redirect(`${back}?err=${encodeURIComponent("Poczekaj, aż opiekun rozpatrzy poprzednie propozycje")}`);
   const profile = await getProfile(user.id);
-  await admin().from("contact_proposals").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Znajomy", ...parsed.data });
+  await db.from("contact_proposals").insert({ device_id: id, user_id: user.id, author: profile?.display_name ?? "Znajomy", ...parsed.data });
   revalidatePath(back);
   redirect(`${back}?ok=1`);
 }
