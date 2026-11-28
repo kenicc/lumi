@@ -516,8 +516,6 @@ void volumeBar(const char* caption, uint8_t level, uint8_t max) {
   if (!volObj) {
     volObj = lv_obj_create(lv_layer_top());
     noScroll(volObj);
-    lv_obj_set_size(volObj, CONTENT_W - 12, 92);
-    lv_obj_align(volObj, LV_ALIGN_BOTTOM_LEFT, 6, -6);
     lv_obj_set_style_radius(volObj, 12, 0);
     lv_obj_set_style_pad_all(volObj, 8, 0);
     lv_obj_t* cap = lv_label_create(volObj);
@@ -527,10 +525,17 @@ void volumeBar(const char* caption, uint8_t level, uint8_t max) {
       noScroll(seg);
       lv_obj_set_style_border_width(seg, 0, 0);
       lv_obj_set_style_radius(seg, 3, 0);
-      int h = 14 + i * 3;  // rosnące słupki: widać kierunek "głośniej"
-      lv_obj_set_size(seg, 14, h);
-      lv_obj_align(seg, LV_ALIGN_BOTTOM_LEFT, i * 18, 0);
     }
+  }
+  // na czystym zegarze (bez etykiet) pasek zakrywa cały dolny rząd, a nie pół kafelka daty
+  int w = (railLabels() ? CONTENT_W : 320) - 12;
+  lv_obj_set_size(volObj, w, 92);
+  lv_obj_align(volObj, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+  int step = (w - 22) / 10;  // 2 x pad 8 + ramka 3
+  for (int i = 0; i < 10; i++) {
+    lv_obj_t* seg = lv_obj_get_child(volObj, i + 1);
+    lv_obj_set_size(seg, step - 4, 14 + i * 3);  // rosnące słupki: widać kierunek "głośniej"
+    lv_obj_align(seg, LV_ALIGN_BOTTOM_LEFT, i * step, 0);
   }
   lv_obj_set_style_bg_color(volObj, P.highContrast ? P.bg : P.surface, 0);
   lv_obj_set_style_border_width(volObj, 3, 0);

@@ -12,7 +12,7 @@
 08_rozmowa_przychodzaca da2d0a91f3f7a1ed
 09_rozmowa_trwa 5c5c998784058d05
 10_nieodebrane b308a85776687ff3
-11_glosnosc 2e9793169cbc26b6
+11_glosnosc 244fe1dac68115aa
 12_komunikat_zmiany 3019c7d19ad6efea
 13_duzy_kontrast_glowny 7d6bb18760aedf60
 14_duzy_kontrast_rozmowa ef6367ef3cd8ffc3
@@ -20,7 +20,7 @@
 16_jeden_przycisk 8f21984c8b116763
 17_bateria 22c58e16f3907184
 18_allegro_glowny 3b001e8995bb1fe1
-19_allegro_dzwonek 2cd8b2972fde9f8f
+19_allegro_dzwonek b80aa16977b86e25
 20_serwis 9437bd10dba497b1
 21_serwis_parowanie daf3cd9c78b384dc
 22_przypomnienie 509e7742f7938206
