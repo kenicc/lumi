@@ -147,6 +147,7 @@ void error(const char* fmt, ...) { (void)fmt; }
 namespace ota {
 void markHealthy() {}
 bool updatedThisBoot() { return false; }
+bool awaitingProof() { return false; }
 }  // namespace ota
 
 static uint8_t batPct = 76;

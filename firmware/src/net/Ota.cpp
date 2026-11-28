@@ -21,6 +21,7 @@ namespace ota {
 namespace {
 constexpr int MAX_TRIES = 3;
 bool justUpdated = false;
+bool pendingProof = false;
 int rolledBack = 0;
 
 bool verifySignature(const uint8_t digest[32], const std::string& sigB64) {
@@ -62,6 +63,7 @@ void begin() {
       }
       p.putInt("tries", tries);
       justUpdated = tries == 1;
+      pendingProof = true;
     } else {
       // działa inna wersja niż oczekiwana (np. powrót zrobił już bootloader)
       p.remove("pend");
@@ -75,6 +77,7 @@ void begin() {
 }
 
 void markHealthy() {
+  pendingProof = false;
   esp_ota_mark_app_valid_cancel_rollback();  // gdy bootloader ma włączony powrót - też potwierdź
   Preferences p;
   p.begin("lumi-ota", false);
@@ -90,6 +93,7 @@ void markHealthy() {
 }
 
 bool updatedThisBoot() { return justUpdated; }
+bool awaitingProof() { return pendingProof; }
 int rolledBackFrom() { return rolledBack; }
 
 bool install(const Offer& o, std::string& err) {

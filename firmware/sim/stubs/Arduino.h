@@ -40,5 +40,6 @@ extern SerialStub Serial;
 
 struct EspStub {
   uint64_t getEfuseMac() { return 0xA1B2C3D4E5F6ULL; }
+  void restart() {}
 };
 extern EspStub ESP;

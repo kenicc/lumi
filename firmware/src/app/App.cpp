@@ -727,6 +727,27 @@ bool loadFile(const char* path, cfg::Config& out) {
 
 // LUMI usunięte z aplikacji: kontakty, przypomnienia i zdjęcia poprzedniej rodziny nie mogą
 // zostać na urządzeniu (np. gdy trafi do kogoś innego). Sieć z pierwszego uruchomienia zostaje.
+// Nowa wersja oprogramowania jest zdrowa po 3 minutach pracy. Świeżo zainstalowana musi też połączyć
+// się z serwerem: przed restartem pobrała się przez sieć, więc sieć działała - wersja, która nie umie
+// się połączyć, nie dostałaby już żadnej poprawki. Bez połączenia przez 20 min restart (gdy LUMI nic
+// nie robi); po 3 nieudanych startach ota::begin wraca do poprzedniej wersji.
+constexpr uint32_t HEALTHY_AFTER_MS = 3 * 60 * 1000UL;
+constexpr uint32_t PROOF_TIMEOUT_MS = 20 * 60 * 1000UL;
+
+void checkHealth(uint32_t now) {
+  if (healthyMarked || now < HEALTHY_AFTER_MS) return;
+  if (!ota::awaitingProof() || net::cloud() == net::Cloud::Ok || net::cloud() == net::Cloud::Unclaimed) {
+    healthyMarked = true;
+    ota::markHealthy();
+    return;
+  }
+  if (now > PROOF_TIMEOUT_MS && idleFlag && call.phase == Phase::None) {
+    diag::error("[ota] nowa wersja nie polaczyla sie z serwerem w 20 min - restart");
+    delay(200);
+    ESP.restart();
+  }
+}
+
 void forgetConfig() {
   if (!haveConfig) return;
   if (call.phase != Phase::None) return;  // sieć zgłosi to ponownie po rozmowie
@@ -839,10 +860,7 @@ void tick() {
   // procesor może zwolnić także przy radiu FM (analogowe); radio internetowe wymaga dekodowania
   slowFlag = !screenOn && call.phase == Phase::None && !(as.playing && as.src == audio::Src::Stream);
   callFlag = call.phase != Phase::None;
-  if (!healthyMarked && now > 180000) {  // 3 minuty pracy: nowa wersja oprogramowania jest zdrowa
-    healthyMarked = true;
-    ota::markHealthy();
-  }
+  checkHealth(now);
 
   if (now - lastSecond >= 1000) {
     lastSecond = now;
