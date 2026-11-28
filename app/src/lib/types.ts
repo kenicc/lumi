@@ -3,6 +3,7 @@ import type { Settings } from "./schema";
 export type Role = "guardian" | "family" | "friend";
 
 export interface DeviceStatus {
+  alertLevel?: number;  // serwer: najniższy zgłoszony próg baterii (lib/alerts.ts), nie od urządzenia
   version?: number;
   battery?: number;
   batteryMv?: number;
