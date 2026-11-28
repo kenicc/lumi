@@ -537,6 +537,37 @@ void fetchMessages(const Settings& s) {
   if (any) bus::post(Event(Ev::MessagesArrived));
 }
 
+// Kolejka zdarzeń przeżywa restart: "bez potwierdzenia" po zaniku zasilania nie może przepaść, bo
+// serwer go nie odtworzy (po restarcie LUMI znów jest w sieci). Kilka wpisów dziennie - flash to zniesie.
+constexpr const char* EVENTS_FILE = "/events.txt";
+
+void saveEvents() {  // wywoływać z zajętym mtx
+  if (events.empty()) {
+    LittleFS.remove(EVENTS_FILE);
+    return;
+  }
+  File f = LittleFS.open("/events.tmp", "w");
+  if (!f) return;
+  for (const auto& e : events) {
+    f.write(reinterpret_cast<const uint8_t*>(e.data()), e.size());
+    f.write('\n');
+  }
+  f.close();
+  LittleFS.rename("/events.tmp", EVENTS_FILE);
+}
+
+void loadEvents() {
+  File f = LittleFS.open(EVENTS_FILE, "r");
+  if (!f) return;
+  while (f.available() && events.size() < MAX_EVENTS) {
+    String l = f.readStringUntil('\n');
+    l.trim();
+    if (l.length()) events.push_back(l.c_str());
+  }
+  f.close();
+  if (!events.empty()) Serial.printf("[serwer] %u zdarzen z poprzedniego uruchomienia czeka na wyslanie\n", (unsigned)events.size());
+}
+
 void flushEvents(const Settings& s) {
   for (int i = 0; i < 5; i++) {  // kilka na obieg, żeby nie blokować reszty
     xSemaphoreTake(mtx, portMAX_DELAY);
@@ -550,6 +581,7 @@ void flushEvents(const Settings& s) {
     if (r.code != 200 && r.code != 400) return;  // spróbuj później; 400 = zły wpis, odrzuć
     xSemaphoreTake(mtx, portMAX_DELAY);
     if (!events.empty()) events.pop_front();
+    saveEvents();
     xSemaphoreGive(mtx);
   }
 }
@@ -776,6 +808,7 @@ void task(void*) {
 
 void begin() {
   mtx = xSemaphoreCreateMutex();
+  loadEvents();
   // 12 KB: uzgadnianie TLS (mbedTLS) potrafi zająć ok. 8 KB stosu; zapas widać w "status"
   xTaskCreatePinnedToCore(task, "net", 12288, nullptr, 2, nullptr, 0);
 }
@@ -836,6 +869,7 @@ void queueEvent(const std::string& json) {
   xSemaphoreTake(mtx, portMAX_DELAY);
   if (events.size() >= MAX_EVENTS) events.pop_front();
   events.push_back(json);
+  saveEvents();
   xSemaphoreGive(mtx);
 }
 
