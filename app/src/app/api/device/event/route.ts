@@ -40,7 +40,19 @@ export async function POST(req: Request) {
     await admin().from("messages").update({ read_at: at.toISOString() }).eq("id", e.id).eq("device_id", d.id).is("read_at", null);
     return NextResponse.json({ ok: true });
   }
-  await admin().from("reminder_events").insert({ device_id: d.id, reminder_id: e.id, text: e.text, minute: e.minute, status: e.status, at: at.toISOString() });
+  // LUMI ponawia zdarzenie, dopóki nie dostanie odpowiedzi. Gdy odpowiedź zginęła po zapisie, ten sam
+  // wpis (ten sam czas z urządzenia co do sekundy) przyjdzie drugi raz - bez drugiego zapisu i powiadomienia.
+  const row = { device_id: d.id, reminder_id: e.id, status: e.status, at: at.toISOString() };
+  const { data: dup } = await admin()
+    .from("reminder_events")
+    .select("id")
+    .eq("device_id", row.device_id)
+    .eq("reminder_id", row.reminder_id)
+    .eq("status", row.status)
+    .eq("at", row.at)
+    .limit(1);
+  if (dup?.length) return NextResponse.json({ ok: true, duplicate: true });
+  await admin().from("reminder_events").insert({ ...row, text: e.text, minute: e.minute });
 
   if (e.status === "missed") {
     const r = currentSettings(d.settings).reminders.find((x) => x.id === e.id);

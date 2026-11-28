@@ -150,6 +150,19 @@ describe("API urządzenia", () => {
     expect(await r.json()).toHaveLength(0);
   });
 
+  it("ponowione zdarzenie przypomnienia (zgubiona odpowiedź) nie zapisuje się drugi raz", async () => {
+    await hello(post("/api/device/hello", { id: ID, secret: SECRET, pair: PAIR }));
+    const at = Math.floor(Date.now() / 1000) - 60;
+    const e = { type: "reminder", id: "r1", text: "Leki", minute: 480, status: "missed", at };
+    expect((await event(post("/api/device/event", e))).status).toBe(200);
+    const r = await event(post("/api/device/event", e));
+    expect(await r.json()).toMatchObject({ duplicate: true });
+    expect(db.tables.reminder_events).toHaveLength(1);
+    // to samo przypomnienie później (np. następnego dnia) to nowe zdarzenie
+    await event(post("/api/device/event", { ...e, at: at + 30 }));
+    expect(db.tables.reminder_events).toHaveLength(2);
+  });
+
   it("odrzuca zły format danych", async () => {
     const r = await hello(post("/api/device/hello", { id: "LUMI-zz", secret: "x", pair: "1" }));
     expect(r.status).toBe(400);
