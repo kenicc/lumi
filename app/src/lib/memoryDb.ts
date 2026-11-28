@@ -87,7 +87,7 @@ export function memoryDb() {
     function run(): Row[] {
       if (op === "insert") {
         const list = Array.isArray(payload) ? payload : [payload];
-        tables[table].push(...list.map((r) => ({ id: r.id ?? (seq += 1), ...r })));
+        tables[table].push(...list.map((r) => ({ id: r.id ?? (seq += 1), created_at: new Date().toISOString(), ...r })));  // jak domyślne wartości w Postgresie
         return list;
       }
       if (op === "upsert") {

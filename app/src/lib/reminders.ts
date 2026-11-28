@@ -11,11 +11,14 @@ export type DayState = "done" | "missed" | "snoozed" | "shown" | "waiting" | "up
 
 const DAY_NAMES = ["pn", "wt", "śr", "cz", "pt", "sb", "nd"];
 
+const EVERY = ["poniedziałek", "wtorek", "środę", "czwartek", "piątek", "sobotę", "niedzielę"];
+
 export function daysText(days: number[]): string {
   const d = [...new Set(days)].sort();
   if (d.length === 0 || d.length === 7) return "codziennie";
   if (d.join() === "1,2,3,4,5") return "pn-pt";
   if (d.join() === "6,7") return "weekend";
+  if (d.length === 1) return `co ${EVERY[d[0] - 1]}`;  // samo "śr" wygląda jak skrót, którego nikt nie rozszyfruje
   return d.map((x) => DAY_NAMES[x - 1]).join(", ");
 }
 

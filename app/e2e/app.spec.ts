@@ -49,14 +49,16 @@ test("wiadomość: wysłana czeka na przeczytanie", async ({ page }) => {
   await expect(page.locator("li", { hasText: "Dzwonię wieczorem" })).toContainText("czeka na przeczytanie");
 });
 
-test("ekran główny: zmiana przycisku widać w podglądzie i w historii zmian", async ({ page }) => {
+test("ekran główny: pora dnia znika z podglądu i trafia do historii zmian", async ({ page }) => {
   await page.goto(`${D}/ekran`);
-  await page.locator("select[name=slot2]").selectOption("contact:basia");
+  const preview = page.locator(".card").first();
+  await expect(preview).toContainText("Wtorek rano");
+  await page.getByLabel(/Pokazuj porę dnia/).uncheck();
   await page.getByRole("button", { name: "Zapisz" }).click();
   await expect(page.locator(".flash.ok")).toContainText("Zapisano");
-  await expect(page.locator(".card").first()).toContainText("Basia");
+  await expect(preview).not.toContainText("rano");
   await page.goto(D);
-  await expect(page.getByText("zmieniła przyciski na ekranie głównym")).toBeVisible();
+  await expect(page.getByText("zmieniła ekran główny")).toBeVisible();
 });
 
 test("API urządzenia bez sekretu jest zamknięte", async ({ request }) => {

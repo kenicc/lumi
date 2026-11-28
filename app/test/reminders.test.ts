@@ -12,6 +12,7 @@ describe("przypomnienia", () => {
     expect(daysText([])).toBe("codziennie");
     expect(daysText([1, 2, 3, 4, 5])).toBe("pn-pt");
     expect(daysText([1, 3, 5])).toBe("pn, śr, pt");
+    expect(daysText([3])).toBe("co środę");
   });
 
   it("czas polski: wtorek 24.11.2026, 9:00", () => {

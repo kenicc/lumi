@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Place { name: string; admin1?: string; latitude: number; longitude: number }
 
@@ -9,6 +9,14 @@ export function PlaceSearch({ place, lat, lon }: { place: string; lat: number; l
   const [results, setResults] = useState<Place[]>([]);
   const [chosen, setChosen] = useState({ place, lat, lon });
   const [busy, setBusy] = useState(false);
+  const [none, setNone] = useState(false);
+  const hidden = useRef<HTMLInputElement>(null);
+  const picked = useRef(false);
+
+  // wybór z listy od razu zapisuje - bez osobnego „Zapisz”, którego łatwo nie zauważyć
+  useEffect(() => {
+    if (picked.current) hidden.current?.form?.requestSubmit();
+  }, [chosen]);
 
   async function search() {
     if (q.trim().length < 2) return;
@@ -17,6 +25,7 @@ export function PlaceSearch({ place, lat, lon }: { place: string; lat: number; l
       .then((x) => x.json())
       .catch(() => ({}));
     setResults(r.results ?? []);
+    setNone(!(r.results ?? []).length);
     setBusy(false);
   }
 
@@ -27,19 +36,20 @@ export function PlaceSearch({ place, lat, lon }: { place: string; lat: number; l
       <div className="row">
         <input id="q" type="text" className="grow" value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); search(); } }} />
-        <button type="button" className="btn" onClick={search} disabled={busy}>Szukaj</button>
+        <button type="button" className="btn" onClick={search} disabled={busy}>{busy ? "Szukam…" : "Szukaj"}</button>
       </div>
+      {none && <p className="dim small">Nic nie znalazłem - sprawdź pisownię.</p>}
       <ul className="list">
         {results.map((p) => (
           <li key={`${p.latitude},${p.longitude}`}>
             <label className="check" style={{ padding: "8px 0" }}>
-              <input type="radio" name="pick" onChange={() => setChosen({ place: p.name, lat: p.latitude, lon: p.longitude })} />
+              <input type="radio" name="pick" onChange={() => { picked.current = true; setChosen({ place: p.name, lat: p.latitude, lon: p.longitude }); }} />
               <span>{p.name}{p.admin1 ? <span className="dim">, {p.admin1}</span> : null}</span>
             </label>
           </li>
         ))}
       </ul>
-      <input type="hidden" name="place" value={chosen.place} />
+      <input ref={hidden} type="hidden" name="place" value={chosen.place} />
       <input type="hidden" name="lat" value={chosen.lat} />
       <input type="hidden" name="lon" value={chosen.lon} />
     </>

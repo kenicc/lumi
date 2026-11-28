@@ -50,7 +50,7 @@ export default async function Access({ params, searchParams }: { params: Promise
           <p className="dim small">Przy drżeniu LUMI ignoruje bardzo krótkie dotknięcia.</p>
           <label htmlFor="repeatIgnoreMs">Ignoruj powtórzone naciśnięcia przez</label>
           <select id="repeatIgnoreMs" name="repeatIgnoreMs" defaultValue={a.repeatIgnoreMs}>
-            {[250, 500, 1000, 1500].map((v) => <option key={v} value={v}>{v / 1000} s</option>)}
+            {[250, 500, 1000, 1500].map((v) => <option key={v} value={v}>{(v / 1000).toLocaleString("pl-PL")} s</option>)}
           </select>
           <label className="check">
             <input type="checkbox" name="oneButton" defaultChecked={a.oneButton} />

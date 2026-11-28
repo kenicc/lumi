@@ -5,8 +5,8 @@ import { Flash, SaveBar, Top, type SP } from "@/components/ui";
 
 const SIZES = [
   { v: 0, t: "Normalny", px: 18 },
-  { v: 1, t: "Duży", px: 23 },
-  { v: 2, t: "Bardzo duży", px: 28 },
+  { v: 1, t: "Duży", px: 22 },
+  { v: 2, t: "Bardzo duży", px: 26 },
 ];
 
 export default async function Look({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SP }) {

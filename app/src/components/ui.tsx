@@ -51,7 +51,13 @@ export function ago(iso: string | null): string {
   if (m < 60) return `${m} min temu`;
   const h = Math.round(m / 60);
   if (h < 24) return `${h} godz. temu`;
-  return `${Math.round(h / 24)} dni temu`;
+  const d = Math.round(h / 24);
+  if (d === 1) return "wczoraj";
+  if (d < 7) return `${d} dni temu`;
+  const w = Math.round(d / 7);
+  if (d < 31) return w === 1 ? "tydzień temu" : `${w} tyg. temu`;
+  const mo = Math.round(d / 30);
+  return mo === 1 ? "miesiąc temu" : `${mo} mies. temu`;
 }
 
 // Polska odmiana: 1 nowa propozycja, 2-4 nowe propozycje, 5+ nowych propozycji (ale 22 nowe)
