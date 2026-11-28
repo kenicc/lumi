@@ -7,6 +7,14 @@ void Queue::addDue(const std::vector<cfg::Reminder>& list, int wday, int minuteO
     if (cfg::reminderDue(r, wday, minuteOfDay)) q_.push_back({r.id, r.text, r.minute, r.confirm, 0, 0});
 }
 
+bool dueWindow(long last, long now, long& from, long& to) {
+  if (last < 0 || now - last > CATCH_UP_MIN || last - now > CATCH_UP_MIN) last = now - 1;
+  if (now <= last) return false;  // zegar cofnięty o chwilę: te minuty już były
+  from = last + 1;
+  to = now;
+  return true;
+}
+
 bool Queue::start(uint32_t now) {
   if (active_) return false;
   for (auto it = q_.begin(); it != q_.end(); ++it) {

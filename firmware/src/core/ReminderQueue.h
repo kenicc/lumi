@@ -21,6 +21,13 @@ struct Item {
 
 enum class Timeout : uint8_t { None, Missed, Shown };
 
+// Które minuty (od 1970, czas lokalny nieistotny) sprawdzić teraz, skoro ostatnio sprawdzona była
+// `last` (-1 = jeszcze żadna). Spóźniona pętla nie gubi przypomnień - nadrabiamy do CATCH_UP minut.
+// Cofnięcie zegara nie powtarza przypomnień, a duży skok (np. pierwsze ustawienie czasu) zaczyna
+// od bieżącej minuty, zamiast wysypać wszystko z przeszłości. Zwraca false, gdy nic do sprawdzenia.
+constexpr long CATCH_UP_MIN = 10;
+bool dueWindow(long last, long now, long& from, long& to);
+
 class Queue {
  public:
   static constexpr uint32_t SNOOZE_MS = 10UL * 60 * 1000;

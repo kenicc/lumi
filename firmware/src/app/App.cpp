@@ -261,9 +261,20 @@ void startReadyReminder() {
   audio::sound(audio::Sound::Notice);
 }
 
-void checkReminders(const tm& l) {
+long remChecked = -1;  // ostatnia sprawdzona minuta (od 1970)
+
+// Wywoływane co sekundę; każda minuta jest sprawdzona dokładnie raz, nawet gdy pętla się spóźni
+void checkReminders() {
   if (!haveConfig || !timeValid()) return;
-  reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
+  long from, to;
+  if (!rem::dueWindow(remChecked, (long)(time(nullptr) / 60), from, to)) return;
+  for (long m = from; m <= to; m++) {
+    time_t t = (time_t)m * 60;
+    tm l;
+    localtime_r(&t, &l);
+    reminders.addDue(C.reminders, l.tm_wday, l.tm_hour * 60 + l.tm_min);
+  }
+  remChecked = to;
 }
 
 // Prawa kolumna: znaczenie zależy od ekranu, ale góra = tak, dół = nie/wstecz tam, gdzie to możliwe
@@ -826,6 +837,7 @@ void tick() {
     lastSecond = now;
     updateLive();
     checkBattery();
+    checkReminders();
     tm l = now_tm();
     // ikona połączenia: Wi-Fi albo kreski zasięgu - odśwież zegar, gdy się zmieni
     static int lastConn = -1;
@@ -835,7 +847,6 @@ void tick() {
     lastConn = conn;
     if (l.tm_min != lastMinute) {
       lastMinute = l.tm_min;
-      checkReminders(l);
       if (scr == Screen::Home && call.phase == Phase::None) render();
     } else if (connChanged && scr == Screen::Home && call.phase == Phase::None) {
       render();

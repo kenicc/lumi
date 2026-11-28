@@ -350,6 +350,28 @@ static void test_rtc_codec() {
   TEST_ASSERT_FALSE(rtcc::decode(junk, back));
 }
 
+void test_due_window() {
+  long from = 0, to = 0;
+  // pierwsze sprawdzenie: tylko bieżąca minuta
+  TEST_ASSERT_TRUE(rem::dueWindow(-1, 1000, from, to));
+  TEST_ASSERT_EQUAL(1000, from);
+  TEST_ASSERT_EQUAL(1000, to);
+  // ta sama minuta drugi raz: nic
+  TEST_ASSERT_FALSE(rem::dueWindow(1000, 1000, from, to));
+  // pętla spóźniona o 3 minuty: nadrabiamy wszystkie trzy
+  TEST_ASSERT_TRUE(rem::dueWindow(1000, 1003, from, to));
+  TEST_ASSERT_EQUAL(1001, from);
+  TEST_ASSERT_EQUAL(1003, to);
+  // zegar cofnięty o 2 minuty: bez powtórek
+  TEST_ASSERT_FALSE(rem::dueWindow(1003, 1001, from, to));
+  // duży skok w przód (ustawienie czasu) i w tył (poprawka złego zegara): od bieżącej minuty
+  TEST_ASSERT_TRUE(rem::dueWindow(1003, 5000, from, to));
+  TEST_ASSERT_EQUAL(5000, from);
+  TEST_ASSERT_TRUE(rem::dueWindow(5000, 1000, from, to));
+  TEST_ASSERT_EQUAL(1000, from);
+  TEST_ASSERT_EQUAL(1000, to);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_button_short_after_debounce);
@@ -371,6 +393,7 @@ int main() {
   RUN_TEST(test_config_broken);
   RUN_TEST(test_reminders);
   RUN_TEST(test_reminder_queue);
+  RUN_TEST(test_due_window);
   RUN_TEST(test_contract);
   RUN_TEST(test_rtc_codec);
   return UNITY_END();
